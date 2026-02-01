@@ -2,26 +2,50 @@ import { v4 as uuidv4 } from 'uuid';
 import { client } from '../config/redis.js';
 
 export class Patient {
-    static async create({ doctorId, name, dateOfBirth, phone, email }) {
+    static async create({ 
+        doctorId, 
+        fullName, 
+        dateOfBirth, 
+        gender = 'Unknown',
+        contactInfo = {},
+        insuranceInfo = {}
+    }) {
         const patientId = uuidv4();
         
         // Generate avatar initials
-        const avatarInitials = name.split(' ').map(n => n[0]).join('').toUpperCase();
+        const avatarInitials = fullName.split(' ').map(n => n[0]).join('').toUpperCase();
         
         const patientData = {
             id: patientId,
             doctorId,
-            name,
+            fullName,
+            name: fullName, // Alias for frontend
             avatarInitials,
             dateOfBirth: dateOfBirth || '',
-            phone: phone || '',
-            email: email || '',
+            gender,
+            contactInfo: {
+                phone: contactInfo.phone || '',
+                email: contactInfo.email || '',
+                address: contactInfo.address || ''
+            },
+            insuranceInfo: {
+                provider: insuranceInfo.provider || '',
+                memberId: insuranceInfo.memberId || ''
+            },
+            medicalHistory: {
+                conditions: [],
+                surgeries: [],
+                medications: [],
+                allergies: []
+            },
             lastVisit: 'No visits yet',
             createdAt: new Date().toISOString()
         };
 
-        // Store patient data
-        await client.hSet(`patient:${patientId}`, patientData);
+        // Store patient data as JSON to handle nested objects
+        await client.hSet(`patient:${patientId}`, {
+            data: JSON.stringify(patientData)
+        });
         
         // Add to doctor's patient list
         await client.sAdd(`doctor:${doctorId}:patients`, patientId);
@@ -34,10 +58,9 @@ export class Patient {
     }
 
     static async findById(patientId) {
-        const patientData = await client.hGetAll(`patient:${patientId}`);
-        if (!patientData || !patientData.id) return null;
-        
-        return patientData;
+        const patientJson = await client.hGet(`patient:${patientId}`, 'data');
+        if (!patientJson) return null;
+        return JSON.parse(patientJson);
     }
 
     static async findByDoctor(doctorId, limit = 100) {
@@ -60,24 +83,20 @@ export class Patient {
     }
 
     static async update(patientId, updates) {
-        const allowedUpdates = ['name', 'dateOfBirth', 'phone', 'email'];
-        const filteredUpdates = {};
-        
-        for (const key of allowedUpdates) {
-            if (updates[key] !== undefined) {
-                filteredUpdates[key] = updates[key];
-            }
+        const patient = await this.findById(patientId);
+        if (!patient) return null;
+
+        const updatedPatient = { ...patient, ...updates };
+
+        if (updates.fullName) {
+            updatedPatient.avatarInitials = updates.fullName.split(' ').map(n => n[0]).join('').toUpperCase();
         }
 
-        if (updates.name) {
-            filteredUpdates.avatarInitials = updates.name.split(' ').map(n => n[0]).join('').toUpperCase();
-        }
+        await client.hSet(`patient:${patientId}`, {
+            data: JSON.stringify(updatedPatient)
+        });
 
-        if (Object.keys(filteredUpdates).length > 0) {
-            await client.hSet(`patient:${patientId}`, filteredUpdates);
-        }
-
-        return await this.findById(patientId);
+        return updatedPatient;
     }
 
     static async delete(patientId) {
@@ -95,6 +114,7 @@ export class Patient {
     }
 
     static async updateLastVisit(patientId, visitDate) {
-        await client.hSet(`patient:${patientId}`, { lastVisit: visitDate });
+        // We reuse the update method which handles the JSON read/write cycle
+        await this.update(patientId, { lastVisit: visitDate });
     }
 }

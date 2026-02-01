@@ -7,6 +7,7 @@ import { connectRedis } from './config/redis.js';
 import appointmentRoutes from './routes/appointments.js';
 import authRoutes from './routes/auth.js';
 import patientRoutes from './routes/patients.js';
+import scribeRoutes from './routes/scribe.js';
 import statsRoutes from './routes/stats.js';
 
 dotenv.config();
@@ -42,6 +43,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/patients', patientRoutes);
 app.use('/api/appointments', appointmentRoutes);
 app.use('/api/stats', statsRoutes);
+app.use('/api/scribe', scribeRoutes);
 
 // 404 handler
 app.use((req, res) => {

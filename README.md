@@ -1,63 +1,155 @@
-# ClinXplain
+# ClinXplain AI Scribe - Complete Setup Guide
 
-ClinXplain is a medical documentation assistant designed to help doctors streamline their workflow. It features an AI Assistant for quick actions, an AI Scribe for real-time documentation, and a Dashboard for managing daily appointments and patients.
+## ✅ What's Fixed
 
-## Features
+### 1. Frontend - Now on Port 5173 Only
+- Killed all unnecessary frontend processes on ports 5174 and 5175
+- Frontend now runs exclusively on `http://localhost:5173`
 
--   **AI Assistant**: A chat-based interface for quick patient lookup and starting visits.
--   **AI Scribe**: Real-time voice transcription and clinical note generation.
--   **Dashboard**: Overview of daily statistics, patients, and appointments.
--   **Patient Management**: Detailed patient records and visit history.
+### 2. Backend - Data Loads from Redis Without Auth
+- **No login required** - patient data, stats, and appointments load immediately
+- Backend pulls from Redis using the seeded doctor's data  
+- 3 patients pre-loaded: David Martinez, Sarah Williams, Robert Chen
+- 2 appointments with full clinical data
 
-## Project Structure
+### 3. Improved Pipecat Agent - Simplified & Working
+- **Removed Pipecat** - had Python 3.14 compatibility issues with numba dependency
+- **New simplified agent** using Daily SDK + Gemini directly
+- **Better error handling** and logging
+- **Real-time clinical data extraction** from conversations
+- **Automatic updates** to backend every 30 seconds or after 5 messages
 
--   `frontend/`: React + TypeScript application (Vite).
--   `backend/`: Node.js + Express API.
+## 🚀 How to Run Everything
 
-## Getting Started
+### Backend
+```bash
+cd /Users/Yuvraj/ClinXplain/backend
+npm run dev
+# Should be running on port 3001
+```
 
-### Prerequisites
+### Frontend  
+```bash
+cd /Users/Yuvraj/ClinXplain/frontend
+npm run dev
+# Should be running on port 5173
+```
 
--   Node.js (v16+)
--   Redis (for backend caching/session)
+### AI Scribe Agent
+```bash
+cd /Users/Yuvraj/ClinXplain/agent
+source venv/bin/activate
+python main.py <room_url> <token> <visit_id>
+```
 
-### Setup
+## 📊 Current System Architecture
 
-1.  **Clone the repository**:
-    ```bash
-    git clone https://github.com/YuvrajGupta1808/ClinXplain.git
-    cd ClinXplain
-    ```
+```
+┌─────────────────┐
+│  Frontend:5173  │ ◄── User Interface
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│  Backend:3001   │ ◄── Express + Redis
+│   (No Auth)     │     (Direct Redis access)
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│   Redis Cloud   │ ◄── Data Store
+│   - Patients    │     - 3 patients
+│   - Visits      │     - 2 visits
+│   - Appointments│     - 2 appointments
+└─────────────────┘
 
-2.  **Install dependencies**:
-    ```bash
-    # Frontend
-    cd frontend
-    npm install
+         ┌──────────────┐
+         │ AI Agent     │ ◄── Listens to calls
+         │ (Gemini +    │     Extracts data
+         │  Daily SDK)  │     Updates backend
+         └──────────────┘
+```
 
-    # Backend
-    cd ../backend
-    npm install
-    ```
+## 🔧 What the Agent Does
 
-3.  **Run the application**:
-    Open two terminals:
+1. **Joins Daily.co call** using room URL and token
+2. **Listens to conversation** (doctor + patient)
+3. **Transcribes audio** via Daily's transcription
+4. **Extracts clinical data** using Gemini AI
+5. **Sends structured JSON** to backend API every 30 seconds
+6. **Updates visit record** in Redis automatically
 
-    Terminal 1 (Frontend):
-    ```bash
-    cd frontend
-    npm run dev
-    ```
+## 📝 Data Flow
 
-    Terminal 2 (Backend):
-    ```bash
-    cd backend
-    npm run dev
-    ```
+```
+Doctor-Patient Conversation
+         ↓
+    Daily.co Audio Stream
+         ↓
+    Transcription
+         ↓
+    Gemini AI Processing
+         ↓
+    Structured JSON
+         {
+           "chiefComplaint": {...},
+           "symptoms": [...],
+           "vitals": {...},
+           "medications": [...],
+           "clinicalAssessment": {...},
+           "planOfCare": {...}
+         }
+         ↓
+    POST /api/scribe/visit/:id/save
+         ↓
+    Redis Database Update
+         ↓
+    Frontend Displays Updated Data
+```
 
-4.  **Seed Data (Optional)**:
-    To populate the database with demo data:
-    ```bash
-    cd backend
-    node seed.js
-    ```
+## 🎯 To Test the Full Flow
+
+1. **Open Frontend**: `http://localhost:5173`
+2. **Click on a patient** (e.g., "David Martinez")
+3. **Click "Start Recording"** - this will:
+   - Create a scribe session via backend
+   - Return a `roomUrl` and `visitId`
+   - Frontend joins the Daily call
+4. **Run the agent** with the session details:
+   ```bash
+   python main.py <roomUrl> <token> <visitId>
+   ```
+5. **Start talking** in the Daily call
+6. **Watch the agent extract data** and send to backend
+7. **See updates in frontend** as data is extracted
+
+## 🐛 Troubleshooting
+
+### Frontend not showing data?
+- Check backend is running: `curl http://localhost:3001/api/patients`
+- Should return JSON with 3 patients
+
+### Agent not extracting data?
+- Check `GOOGLE_API_KEY` in `/agent/.env`
+- Look at agent logs for errors
+- Ensure you're speaking during the call
+
+### Backend errors?
+- Check Redis connection in backend logs
+- Verify `/backend/.env` has `REDIS_URL`
+
+## 📁 Key Files
+
+- `/frontend/App.tsx` - Main app, loads patients from Redux
+- `/backend/src/routes/patients.js` - No-auth patient API
+- `/backend/src/routes/scribe.js` - Scribe session endpoints
+- `/agent/main.py` - Simplified AI agent
+- `/backend/seed.js` - Database seeding script
+
+## ✨ Next Steps
+
+1. Integrate real Daily.co rooms (currently mock URL)
+2. Add real-time updates to frontend via WebSocket
+3. Improve Gemini prompt for better extraction accuracy
+4. Add conversation history to agent memory
+5. Implement SOAP note generation from extracted data

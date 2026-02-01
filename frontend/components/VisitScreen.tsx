@@ -1,7 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import DailyIframe from '@daily-co/daily-js';
+import React, { useEffect, useRef, useState } from 'react';
 import { INITIAL_TRANSCRIPT_DEMO } from '../constants';
-import { generateSoapNote, generateSuggestions } from '../services/geminiService';
-import { AiSuggestion, Attachment, Patient, PatientHistory, SoapNote, TranscriptEntry } from '../types';
+import { useAuth } from '../context/AuthContext';
+import { generateSuggestions } from '../services/geminiService';
+import { AiSuggestion, Attachment, Patient, PatientHistory, TranscriptEntry } from '../types';
 import AttachmentsPanel from './AttachmentsPanel';
 import InsightsPanel from './InsightsPanel';
 import NotePanel from './NotePanel';
@@ -24,36 +26,69 @@ const VisitScreen: React.FC<VisitScreenProps> = ({
   availablePatients,
   onPatientChange
 }) => {
+  const { user } = useAuth();
   const [isRecording, setIsRecording] = useState(false);
+  const [visit, setVisit] = useState<any>(null); // Full detailed visit object
   const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
-  const [generatedNote, setGeneratedNote] = useState<SoapNote | null>(null);
+  const [activeTab, setActiveTab] = useState<'note' | 'transcript' | 'attachments'>('note');
   const [isGenerating, setIsGenerating] = useState(false);
   const [suggestions, setSuggestions] = useState<AiSuggestion[]>([]);
-  const [activeTab, setActiveTab] = useState<'note' | 'transcript' | 'attachments'>('note');
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const callObjectRef = useRef<any>(null);
   
-  // Simulation State
-  const [demoIndex, setDemoIndex] = useState(0);
-
-  // Simulation Logic
+  // Cleanup Daily call on unmount or back
   useEffect(() => {
-    let timer: ReturnType<typeof setTimeout>;
-    if (isRecording && demoIndex < INITIAL_TRANSCRIPT_DEMO.length) {
-      const entry = INITIAL_TRANSCRIPT_DEMO[demoIndex];
-      const delay = Math.max(1000, entry.text.length * 50); 
-      
-      timer = setTimeout(() => {
-        const newEntry = { ...entry, timestamp: Date.now() };
-        setTranscript(prev => [...prev, newEntry]);
-        setDemoIndex(prev => prev + 1);
-        
-        if ((demoIndex + 1) % 3 === 0) {
-           updateSuggestions([...transcript, newEntry]);
+      return () => {
+          if (callObjectRef.current) {
+              callObjectRef.current.leave();
+              callObjectRef.current.destroy();
+          }
+      };
+  }, []);
+
+  useEffect(() => {
+    const loadData = async () => {
+        if (!patient?.id) return;
+        try {
+            const { getPatientVisits } = await import('../services/scribeService');
+            const history = await getPatientVisits(patient.id);
+            if (history && history.length > 0) {
+                // Load most recent visit
+                setVisit(history[0]);
+                setTranscript(history[0].transcript || []);
+            } else {
+                 setTranscript([]);
+            }
+        } catch (e) {
+            console.error("Failed to load history", e);
         }
-      }, delay);
+    };
+    loadData();
+  }, [patient]);
+
+  // Polling for real-time updates while recording
+  useEffect(() => {
+    let interval: any;
+    if (isRecording && visit?.visitId) {
+      interval = setInterval(async () => {
+        try {
+          const { getVisitDetails } = await import('../services/scribeService');
+          const updatedVisit = await getVisitDetails(visit.visitId);
+          if (updatedVisit) {
+            setVisit(updatedVisit);
+            if (updatedVisit.transcript) {
+              setTranscript(updatedVisit.transcript);
+            }
+          }
+        } catch (e) {
+          console.error("Polling error", e);
+        }
+      }, 3000); // Poll every 3 seconds
     }
-    return () => clearTimeout(timer);
-  }, [isRecording, demoIndex, transcript]);
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isRecording, visit?.visitId]);
 
   const updateSuggestions = async (currentTranscript: TranscriptEntry[]) => {
       if (currentTranscript.length < 2) return;
@@ -61,11 +96,58 @@ const VisitScreen: React.FC<VisitScreenProps> = ({
       setSuggestions(prev => [...newSuggestions, ...prev].slice(0, 5));
   };
 
-  const handleStartRecording = () => {
-    setIsRecording(!isRecording);
-    if (!isRecording && transcript.length === 0) {
-        setDemoIndex(0);
-        setTranscript([]);
+  const handleStartRecording = async () => {
+    if (!isRecording) {
+        try {
+             // 1. Start session in backend
+             const { startScribeSession } = await import('../services/scribeService');
+             const session = await startScribeSession(user?.id || "doctor-1", patient.id);
+             console.log("🚀 Scribe session started:", session);
+             
+             setVisit((prev: any) => ({
+                 ...prev,
+                 visitId: session.visitId,
+                 status: 'in-progress'
+             }));
+             
+             // 2. Join Daily Call (Client-side audio)
+             if (!callObjectRef.current) {
+                 console.log("💎 Creating Daily call object...");
+                 callObjectRef.current = DailyIframe.createCallObject({
+                     audioSource: true,
+                     videoSource: false 
+                 });
+             }
+             
+             console.log("🔗 Joining Daily room:", session.roomUrl);
+             await callObjectRef.current.join({ 
+                 url: session.roomUrl,
+                 token: session.token,
+                 userName: user?.name
+             });
+             console.log("✅ Joined call successfully");
+             
+             // Only set recording to true if everything above succeeded
+             setIsRecording(true);
+             
+        } catch (e) {
+            console.error("Failed to start session", e);
+            alert("Failed to start recording session. Please check your connection.");
+        }
+    } else {
+        // Stop recording
+        try {
+            if (callObjectRef.current) {
+                await callObjectRef.current.leave();
+                await callObjectRef.current.destroy();
+                callObjectRef.current = null;
+                console.log("Left call");
+            }
+            setIsRecording(false);
+        } catch (e) {
+            console.error("Error stopping recording", e);
+            setIsRecording(false);
+        }
     }
   };
 
@@ -73,28 +155,52 @@ const VisitScreen: React.FC<VisitScreenProps> = ({
     setActiveTab('note');
     setIsGenerating(true);
     
-    // Simulate API delay for realism
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    const txToUse = transcript.length > 0 ? transcript : INITIAL_TRANSCRIPT_DEMO;
-    let note = await generateSoapNote(txToUse);
-
-    // Fallback mock note for testing if generation fails or returns empty
-    if (!note || (!note.subjective && !note.objective)) {
-      note = {
-        subjective: "Patient presents with a 3-day history of persistent headache, rated 4/10. Describes pain as dull and throbbing in the frontal region. Reports associated fatigue and mild nausea. No photophobia or phonophobia. Ibuprofen provides temporary relief. Denies recent head trauma or vision changes.",
-        objective: "BP 120/80, HR 72, Temp 98.6°F. Alert and oriented x3. PERRLA. neck supple, no thyromegaly. Neurological exam intact. Cranial nerves II-XII grosssly intact. No focal deficits observed.",
-        assessment: "1. Tension-type headache\n2. Fatigue\n3. Mild dehydration suspect",
-        plan: "1. Recommend adequate hydration (8 glasses of water/day).\n2. Continue OTC analgesics as needed for pain.\n3. Sleep hygiene education.\n4. Follow up in 2 weeks if symptoms persist or worsen."
-      };
+    // In a real flow, this would call the backend which triggers the AI Agent
+    // For now, we simulate the completion and update from backend
+    try {
+        const txToUse = transcript.length > 0 ? transcript : INITIAL_TRANSCRIPT_DEMO;
+        // Mocking the AI extraction results mapping to our detailed schema
+        const mockExtraction: any = {
+            visitId: visit?.visitId || 'new-visit',
+            metadata: {},
+            chiefComplaint: {
+              primaryConcern: "Frontal headache",
+              duration: "3 days",
+              severity: "Moderate"
+            },
+            symptoms: [
+              { name: "Headache", onsetDate: "3 days ago", severityScale: 6, frequency: "Constant" }
+            ],
+            vitals: {
+                bloodPressure: '145/90',
+                heartRate: '78',
+                temperature: '98.6'
+            },
+            medications: [
+              { name: 'Lisinopril', dosage: '10mg', frequency: 'Daily' }
+            ],
+            clinicalAssessment: {
+              primaryDiagnosis: "Essential Hypertension",
+              confidenceLevel: "High"
+            },
+            planOfCare: {
+              medicationsPrescribed: [{ name: 'Lisinopril', dosage: '20mg', frequency: 'Daily' }],
+              lifestyleRecommendations: ['Low sodium diet', 'Regular exercise']
+            },
+            status: 'completed',
+            reports: []
+        };
+        
+        setVisit((prev: any) => ({ ...prev, ...mockExtraction }));
+    } catch (error) {
+        console.error("Failed to generate note", error);
     }
     
-    setGeneratedNote(note);
     setIsGenerating(false);
   };
 
-  const handleNoteChange = (updatedNote: SoapNote) => {
-    setGeneratedNote(updatedNote);
+  const handleVisitChange = (updatedVisit: any) => {
+    setVisit(updatedVisit);
   };
 
   const handleUploadAttachments = (files: FileList) => {
@@ -107,11 +213,17 @@ const VisitScreen: React.FC<VisitScreenProps> = ({
       uploadedAt: Date.now()
     }));
     
-    setAttachments(prev => [...prev, ...newAttachments]);
+    setVisit((prev: any) => ({
+        ...prev,
+        reports: [...(prev?.reports || []), ...newAttachments]
+    }));
   };
 
   const handleDeleteAttachment = (id: string) => {
-    setAttachments(prev => prev.filter(a => a.id !== id));
+    setVisit((prev: any) => ({
+        ...prev,
+        reports: (prev?.reports || []).filter((a: any) => a.id !== id)
+    }));
   };
 
   const handleDownloadAttachment = (attachment: Attachment) => {
@@ -142,6 +254,7 @@ const VisitScreen: React.FC<VisitScreenProps> = ({
         <InsightsPanel 
           suggestions={suggestions} 
           isRecording={isRecording}
+          patient={patient}
           patientHistory={patientHistory}
         />
 
@@ -165,9 +278,9 @@ const VisitScreen: React.FC<VisitScreenProps> = ({
                     className={`flex-1 py-4 text-xs font-bold uppercase tracking-widest border-b-2 transition-all relative ${activeTab === 'attachments' ? 'border-blue-600 text-blue-600 bg-blue-50/20' : 'border-transparent text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}
                 >
                     Attachments
-                    {attachments.length > 0 && (
+                    {(visit?.reports?.length || 0) > 0 && (
                       <span className="absolute top-2 right-2 w-5 h-5 bg-blue-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-                        {attachments.length}
+                        {visit.reports.length}
                       </span>
                     )}
                 </button>
@@ -176,9 +289,9 @@ const VisitScreen: React.FC<VisitScreenProps> = ({
             <div className="flex-1 overflow-hidden flex flex-col">
                 {activeTab === 'note' && (
                     <NotePanel 
-                      note={generatedNote || { subjective: '', objective: '', assessment: '', plan: '' }} 
+                      visitData={visit} 
                       isLoading={isGenerating}
-                      onNoteChange={handleNoteChange}
+                      onVisitChange={handleVisitChange}
                     />
                 )}
                 {activeTab === 'transcript' && (
@@ -189,7 +302,7 @@ const VisitScreen: React.FC<VisitScreenProps> = ({
                 )}
                 {activeTab === 'attachments' && (
                     <AttachmentsPanel 
-                      attachments={attachments}
+                      attachments={visit?.reports || []}
                       onUpload={handleUploadAttachments}
                       onDelete={handleDeleteAttachment}
                       onDownload={handleDownloadAttachment}

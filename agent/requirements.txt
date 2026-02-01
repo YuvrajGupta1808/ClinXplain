@@ -1,0 +1,5 @@
+aiohttp>=3.9.0
+python-dotenv
+loguru
+google-generativeai
+daily-python>=0.10.0

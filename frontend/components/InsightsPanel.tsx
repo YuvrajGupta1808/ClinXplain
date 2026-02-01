@@ -1,10 +1,11 @@
 import { ArrowRight, BookOpen, ClipboardList, History, Stethoscope } from 'lucide-react';
 import React from 'react';
-import { AiSuggestion, PatientHistory } from '../types';
+import { AiSuggestion, Patient, PatientHistory } from '../types';
 
 interface InsightsPanelProps {
   suggestions: AiSuggestion[];
   isRecording: boolean;
+  patient?: Patient;
   patientHistory?: PatientHistory;
 }
 

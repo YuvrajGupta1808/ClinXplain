@@ -49,19 +49,11 @@ const TranscriptPanel: React.FC<TranscriptPanelProps> = ({ transcript, isRecordi
       )}
 
       {transcript.map((entry, idx) => (
-        <div key={idx} className={`flex flex-col ${entry.speaker === 'Doctor' ? 'items-end' : 'items-start'} animate-fadeIn`}>
-          <div className={`text-[10px] mb-2 font-bold tracking-[0.1em] flex items-center gap-1.5 ${entry.speaker === 'Doctor' ? 'text-blue-700 mr-2' : 'text-slate-500 ml-2'}`}>
-            <div className={`w-1.5 h-1.5 rounded-full ${entry.speaker === 'Doctor' ? 'bg-blue-600' : 'bg-slate-400'}`}></div>
-            {entry.speaker.toUpperCase()}
-          </div>
-          <div className={`max-w-[85%] px-5 py-3.5 rounded-2xl text-[13px] leading-relaxed shadow-md ${
-            entry.speaker === 'Doctor' 
-            ? 'bg-gradient-to-br from-blue-600 to-blue-700 text-white rounded-tr-sm' 
-            : 'bg-white text-slate-700 rounded-tl-sm border border-slate-200'
-          }`}>
+        <div key={idx} className="flex flex-col items-start animate-fadeIn">
+          <div className="max-w-[90%] px-5 py-3.5 rounded-2xl text-[13px] leading-relaxed shadow-sm bg-white text-slate-700 rounded-tl-sm border border-slate-200">
             {entry.text}
           </div>
-          <div className={`text-[9px] mt-1.5 text-slate-400 font-mono ${entry.speaker === 'Doctor' ? 'mr-2' : 'ml-2'}`}>
+          <div className="text-[9px] mt-1.5 text-slate-400 font-mono ml-2">
             {new Date(entry.timestamp || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
           </div>
         </div>

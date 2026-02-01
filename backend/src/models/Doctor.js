@@ -69,4 +69,21 @@ export class Doctor {
 
         return await this.findById(doctorId);
     }
+
+    static async findAll() {
+        // Find all doctor keys in Redis
+        const keys = await client.keys('doctor:email:*');
+        const doctorIds = await Promise.all(
+            keys.map(key => client.get(key))
+        );
+        
+        const doctors = await Promise.all(
+            doctorIds.filter(id => id).map(id => this.findById(id))
+        );
+        
+        return doctors.filter(doctor => doctor !== null).map(doc => ({
+            ...doc,
+            password: undefined // Don't expose password
+        }));
+    }
 }

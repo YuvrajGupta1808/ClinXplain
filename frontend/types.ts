@@ -30,12 +30,79 @@ export interface NoteSection {
   content: string;
 }
 
+export interface Vitals {
+  bloodPressure: string;
+  heartRate: string;
+  temperature: string;
+  respiratoryRate?: string;
+  oxygenSaturation?: string;
+  weight?: string;
+  height?: string;
+}
+
+export interface Symptom {
+  name: string;
+  onsetDate: string;
+  severityScale: number;
+  frequency: string;
+}
+
+export interface Medication {
+  name: string;
+  dosage: string;
+  frequency: string;
+  adherence?: string;
+  instructions?: string;
+}
+
+export interface ChiefComplaint {
+  primaryConcern: string;
+  duration: string;
+  severity: string;
+}
+
+export interface ClinicalAssessment {
+  primaryDiagnosis: string;
+  differentialDiagnoses?: string[];
+  confidenceLevel: string;
+  clinicalReasoning?: string;
+}
+
+export interface PlanOfCare {
+  medicationsPrescribed: Medication[];
+  testsOrdered?: string[];
+  lifestyleRecommendations?: string[];
+  referrals?: string[];
+}
+
+export interface VisitData {
+  visitId: string;
+  metadata: any;
+  chiefComplaint: ChiefComplaint;
+  symptoms: Symptom[];
+  vitals: Vitals;
+  medications: Medication[];
+  clinicalAssessment: ClinicalAssessment;
+  planOfCare: PlanOfCare;
+  transcript: TranscriptEntry[];
+  status: 'scheduled' | 'in-progress' | 'completed' | 'signed';
+  reports: Attachment[];
+}
+
 export interface SoapNote {
   subjective: string;
   objective: string;
   assessment: string;
   plan: string;
 }
+
+// Helper to map detailed data to SOAP string format if needed
+export const mapVisitToSoap = (visit: VisitData): SoapNote => ({
+  subjective: `Chief Complaint: ${visit.chiefComplaint?.primaryConcern || ''}\nHistory: ${visit.chiefComplaint?.duration || ''}\nSymptoms: ${visit.symptoms?.map(s => s.name).join(', ') || ''}`,
+  objective: `Vitals:\nBP: ${visit.vitals?.bloodPressure || ''}\nHR: ${visit.vitals?.heartRate || ''}\nTemp: ${visit.vitals?.temperature || ''}`,
+  assessment: `Primary Diagnosis: ${visit.clinicalAssessment?.primaryDiagnosis || ''}\nReasoning: ${visit.clinicalAssessment?.clinicalReasoning || ''}`,
+  plan: `Rx: ${visit.planOfCare?.medicationsPrescribed?.map(m => `${m.name} ${m.dosage}`).join(', ') || ''}\nRecommendations: ${visit.planOfCare?.lifestyleRecommendations?.join(', ') || ''}`
+});
 
 export interface Attachment {
   id: string;

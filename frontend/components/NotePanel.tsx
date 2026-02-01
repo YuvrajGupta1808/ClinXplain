@@ -1,25 +1,57 @@
-import { Copy, MoreHorizontal, RefreshCw, Send } from 'lucide-react';
+import { Copy, MoreHorizontal, RefreshCw, Send, Trash2 } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
-import { SoapNote } from '../types';
+import { SoapNote, VisitData, mapVisitToSoap } from '../types';
 
 interface NotePanelProps {
-  note: SoapNote;
+  visitData: VisitData | null;
   isLoading: boolean;
-  onNoteChange?: (note: SoapNote) => void;
+  onVisitChange?: (visit: VisitData) => void;
 }
 
-const NotePanel: React.FC<NotePanelProps> = ({ note, isLoading, onNoteChange }) => {
-  const [editableNote, setEditableNote] = useState(note);
+const NotePanel: React.FC<NotePanelProps> = ({ visitData, isLoading, onVisitChange }) => {
+  // If no visit data, use a default empty structure
+  const defaultVisit: VisitData = {
+      visitId: '',
+      metadata: {},
+      chiefComplaint: { primaryConcern: '', duration: '', severity: '' },
+      symptoms: [],
+      vitals: { bloodPressure: '', heartRate: '', temperature: '' },
+      medications: [],
+      clinicalAssessment: { primaryDiagnosis: '', confidenceLevel: 'Medium' },
+      planOfCare: { medicationsPrescribed: [] },
+      transcript: [],
+      status: 'in-progress',
+      reports: []
+  };
 
-  // Sync internal state with prop changes (when note is generated)
+  const [editableVisit, setEditableVisit] = useState<VisitData>(visitData || defaultVisit);
+  
+  // Calculate SOAP representation for the 'soap' tab
+  const [soapRepresentation, setSoapRepresentation] = useState<SoapNote>({ subjective: '', objective: '', assessment: '', plan: '' });
+
+  const [activeSubTab, setActiveSubTab] = useState<'soap' | 'vitals' | 'symptoms' | 'meds' | 'plan'>('soap');
+
   useEffect(() => {
-    setEditableNote(note);
-  }, [note]);
+    if (visitData) {
+        setEditableVisit(visitData);
+        setSoapRepresentation(mapVisitToSoap(visitData));
+    }
+  }, [visitData]);
 
-  const handleFieldChange = (field: keyof SoapNote, value: string) => {
-    const updatedNote = { ...editableNote, [field]: value };
-    setEditableNote(updatedNote);
-    onNoteChange?.(updatedNote);
+
+  const handleSoapChange = (field: keyof SoapNote, value: string) => {
+    const updatedSoap = { ...soapRepresentation, [field]: value };
+    setSoapRepresentation(updatedSoap);
+    // Ideally we'd sync this back to structured data or just keep it as the 'note' text
+  };
+
+  const handleVitalsChange = (field: keyof VisitData['vitals'], value: string) => {
+      const updatedVisit = { 
+          ...editableVisit, 
+          vitals: { ...editableVisit.vitals, [field]: value } 
+      };
+      setEditableVisit(updatedVisit);
+      onVisitChange?.(updatedVisit);
   };
 
   if (isLoading) {
@@ -58,41 +90,178 @@ const NotePanel: React.FC<NotePanelProps> = ({ note, isLoading, onNoteChange }) 
          </div>
       </div>
 
+      {/* Structured Tabs */}
+      <div className="flex bg-slate-50 border-b border-slate-100 overflow-x-auto">
+          {['soap', 'vitals', 'symptoms', 'meds', 'plan'].map((tab) => (
+              <button
+                  key={tab}
+                  onClick={() => setActiveSubTab(tab as any)}
+                  className={`px-6 py-2.5 text-[10px] font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${
+                      activeSubTab === tab 
+                      ? 'text-blue-600 border-blue-600 bg-white' 
+                      : 'text-slate-400 border-transparent hover:text-slate-600'
+                  }`}
+              >
+                  {tab}
+              </button>
+          ))}
+      </div>
 
-
-      {/* Note Content - Now Editable */}
+      {/* Note Content - Now Editable with Tabs */}
       <div className="flex-1 overflow-y-auto p-8 font-serif text-sm leading-relaxed text-slate-700 bg-white">
-          <h3 className="font-sans font-bold text-slate-900 mb-2">Subjective</h3>
-          <textarea
-            value={editableNote.subjective}
-            onChange={(e) => handleFieldChange('subjective', e.target.value)}
-            className="w-full whitespace-pre-wrap mb-6 text-slate-600 bg-transparent border-none outline-none resize-none focus:ring-2 focus:ring-blue-200 rounded p-2 min-h-[80px]"
-            placeholder="Enter subjective findings..."
-          />
+          {activeSubTab === 'soap' && (
+              <>
+                <h3 className="font-sans font-bold text-slate-900 mb-2">Subjective</h3>
+                <textarea
+                    value={soapRepresentation.subjective}
+                    onChange={(e) => handleSoapChange('subjective', e.target.value)}
+                    className="w-full whitespace-pre-wrap mb-6 text-slate-600 bg-transparent border-none outline-none resize-none focus:ring-2 focus:ring-blue-200 rounded p-2 min-h-[80px]"
+                    placeholder="Enter subjective findings..."
+                />
 
-          <h3 className="font-sans font-bold text-slate-900 mb-2">Objective</h3>
-          <textarea
-            value={editableNote.objective}
-            onChange={(e) => handleFieldChange('objective', e.target.value)}
-            className="w-full whitespace-pre-wrap mb-6 text-slate-600 bg-transparent border-none outline-none resize-none focus:ring-2 focus:ring-blue-200 rounded p-2 min-h-[80px]"
-            placeholder="Enter objective findings..."
-          />
+                <h3 className="font-sans font-bold text-slate-900 mb-2">Objective</h3>
+                <textarea
+                    value={soapRepresentation.objective}
+                    onChange={(e) => handleSoapChange('objective', e.target.value)}
+                    className="w-full whitespace-pre-wrap mb-6 text-slate-600 bg-transparent border-none outline-none resize-none focus:ring-2 focus:ring-blue-200 rounded p-2 min-h-[80px]"
+                    placeholder="Enter objective findings..."
+                />
 
-          <h3 className="font-sans font-bold text-slate-900 mb-2">Assessment</h3>
-          <textarea
-            value={editableNote.assessment}
-            onChange={(e) => handleFieldChange('assessment', e.target.value)}
-            className="w-full whitespace-pre-wrap mb-6 text-slate-600 bg-transparent border-none outline-none resize-none focus:ring-2 focus:ring-blue-200 rounded p-2 min-h-[80px]"
-            placeholder="Enter assessment..."
-          />
+                <h3 className="font-sans font-bold text-slate-900 mb-2">Assessment</h3>
+                <textarea
+                    value={soapRepresentation.assessment}
+                    onChange={(e) => handleSoapChange('assessment', e.target.value)}
+                    className="w-full whitespace-pre-wrap mb-6 text-slate-600 bg-transparent border-none outline-none resize-none focus:ring-2 focus:ring-blue-200 rounded p-2 min-h-[80px]"
+                    placeholder="Enter assessment..."
+                />
 
-          <h3 className="font-sans font-bold text-slate-900 mb-2">Plan</h3>
-          <textarea
-            value={editableNote.plan}
-            onChange={(e) => handleFieldChange('plan', e.target.value)}
-            className="w-full whitespace-pre-wrap mb-6 text-slate-600 bg-transparent border-none outline-none resize-none focus:ring-2 focus:ring-blue-200 rounded p-2 min-h-[80px]"
-            placeholder="Enter treatment plan..."
-          />
+                <h3 className="font-sans font-bold text-slate-900 mb-2">Plan</h3>
+                <textarea
+                    value={soapRepresentation.plan}
+                    onChange={(e) => handleSoapChange('plan', e.target.value)}
+                    className="w-full whitespace-pre-wrap mb-6 text-slate-600 bg-transparent border-none outline-none resize-none focus:ring-2 focus:ring-blue-200 rounded p-2 min-h-[80px]"
+                    placeholder="Enter treatment plan..."
+                />
+              </>
+          )}
+
+          {activeSubTab === 'vitals' && (
+              <div className="font-sans grid grid-cols-2 gap-6">
+                  <div>
+                      <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Blood Pressure</label>
+                      <input 
+                        type="text" 
+                        value={editableVisit.vitals?.bloodPressure || ''}
+                        onChange={(e) => handleVitalsChange('bloodPressure', e.target.value)}
+                        className="w-full p-3 bg-slate-50 rounded-xl border border-slate-100 placeholder:text-slate-300" placeholder="120/80" 
+                      />
+                  </div>
+                  <div>
+                      <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Heart Rate</label>
+                      <input 
+                        type="text" 
+                        value={editableVisit.vitals?.heartRate || ''}
+                        onChange={(e) => handleVitalsChange('heartRate', e.target.value)}
+                        className="w-full p-3 bg-slate-50 rounded-xl border border-slate-100 placeholder:text-slate-300" placeholder="72 bpm" 
+                      />
+                  </div>
+                  <div>
+                      <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Temperature</label>
+                      <input 
+                        type="text" 
+                        value={editableVisit.vitals?.temperature || ''}
+                        onChange={(e) => handleVitalsChange('temperature', e.target.value)}
+                        className="w-full p-3 bg-slate-50 rounded-xl border border-slate-100 placeholder:text-slate-300" placeholder="98.6 F" 
+                      />
+                  </div>
+                  <div>
+                      <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Weight</label>
+                      <input 
+                        type="text" 
+                        value={editableVisit.vitals?.weight || ''}
+                        onChange={(e) => handleVitalsChange('weight', e.target.value)}
+                        className="w-full p-3 bg-slate-50 rounded-xl border border-slate-100 placeholder:text-slate-300" placeholder="lbs" 
+                      />
+                  </div>
+              </div>
+          )}
+
+          {activeSubTab === 'symptoms' && (
+              <div className="font-sans space-y-4">
+                  <div className="flex items-center justify-between">
+                      <h3 className="text-xs font-bold text-slate-500 uppercase">Tracked Symptoms</h3>
+                      <button className="text-[10px] font-bold text-blue-600 hover:bg-blue-50 px-2 py-1 rounded-md">+ Add Symptom</button>
+                  </div>
+                  <div className="space-y-2">
+                       {editableVisit.symptoms?.map((s, idx) => (
+                           <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100 group">
+                               <div className="flex items-center gap-3">
+                                   <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                                   <span className="text-sm font-semibold text-slate-700">{s.name}</span>
+                               </div>
+                               <div className="flex items-center gap-4 group-hover:opacity-100 transition-opacity">
+                                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Severity: {s.severityScale} • {s.onsetDate}</span>
+                                   <button className="text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100"><Trash2 size={12} /></button>
+                               </div>
+                           </div>
+                       ))}
+                       {(!editableVisit.symptoms || editableVisit.symptoms.length === 0) && (
+                           <div className="p-4 text-center text-slate-400 text-xs italic">No symptoms recorded</div>
+                       )}
+                  </div>
+              </div>
+          )}
+
+          {activeSubTab === 'meds' && (
+              <div className="font-sans space-y-4">
+                  <div className="flex items-center justify-between">
+                      <h3 className="text-xs font-bold text-slate-500 uppercase">Medications</h3>
+                      <button className="text-[10px] font-bold text-blue-600 hover:bg-blue-50 px-2 py-1 rounded-md">+ Add Med</button>
+                  </div>
+                  <div className="space-y-2">
+                       {editableVisit.medications?.map((m, idx) => (
+                           <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100 group">
+                               <div className="flex items-center gap-3">
+                                   <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center">
+                                       <span className="text-[10px] font-bold text-emerald-700">Rx</span>
+                                   </div>
+                                   <div>
+                                       <div className="text-sm font-semibold text-slate-700">{m.name}</div>
+                                       <div className="text-[10px] text-slate-400">{m.dosage} • {m.frequency}</div>
+                                   </div>
+                               </div>
+                               <button className="text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={12} /></button>
+                           </div>
+                       ))}
+                       {(!editableVisit.medications || editableVisit.medications.length === 0) && (
+                           <div className="p-4 text-center text-slate-400 text-xs italic">No active medications</div>
+                       )}
+                  </div>
+              </div>
+          )}
+
+          {activeSubTab === 'plan' && (
+              <div className="font-sans space-y-4">
+                  <div className="flex items-center justify-between">
+                      <h3 className="text-xs font-bold text-slate-500 uppercase">Treatment Plan</h3>
+                      <button className="text-[10px] font-bold text-blue-600 hover:bg-blue-50 px-2 py-1 rounded-md">+ Add Instruction</button>
+                  </div>
+                  <div className="space-y-3">
+                       {/* Display text summary of plan for now, or map recommendations */}
+                        <div className="p-3 bg-blue-50/50 rounded-lg text-sm text-slate-700 border border-blue-100">
+                           {editableVisit.planOfCare?.lifestyleRecommendations?.map((rec, i) => (
+                               <div key={i} className="mb-2 flex items-start gap-2">
+                                   <span className="text-blue-500 mt-1">•</span>
+                                   <span>{rec}</span>
+                               </div>
+                           ))}
+                           {(!editableVisit.planOfCare?.lifestyleRecommendations || editableVisit.planOfCare.lifestyleRecommendations.length === 0) && (
+                               <span className="text-slate-400 italic">No specific lifestyle recommendations.</span>
+                           )}
+                        </div>
+                  </div>
+              </div>
+          )}
 
           <div className="mt-8 pt-4 border-t border-slate-100 text-xs text-slate-400 font-sans">
               Generated by ClinXplain • Review required before signing

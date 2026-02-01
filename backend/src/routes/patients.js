@@ -1,19 +1,36 @@
 import express from 'express';
 import { authenticateToken } from '../middleware/auth.js';
+import { Doctor } from '../models/Doctor.js';
 import { Patient } from '../models/Patient.js';
 
 const router = express.Router();
 
-// Get all patients for current doctor
-router.get('/', authenticateToken, async (req, res) => {
+// Get all patients for current doctor (or default doctor if not authenticated)
+router.get('/', async (req, res) => {
     try {
         const { recent, limit } = req.query;
         
+        // Use authenticated doctor ID if available, otherwise use default seeded doctor
+        let doctorId = req.user?.doctorId;
+        
+        if (!doctorId) {
+            // Find the first doctor in Redis (the seeded doctor)
+            const doctors = await Doctor.findAll();
+            if (doctors.length > 0) {
+                doctorId = doctors[0].id;
+            } else {
+                return res.status(404).json({
+                    success: false,
+                    error: 'No doctor found in database'
+                });
+            }
+        }
+        
         let patients;
         if (recent === 'true') {
-            patients = await Patient.getRecentPatients(req.user.doctorId, parseInt(limit) || 4);
+            patients = await Patient.getRecentPatients(doctorId, parseInt(limit) || 4);
         } else {
-            patients = await Patient.findByDoctor(req.user.doctorId, parseInt(limit) || 100);
+            patients = await Patient.findByDoctor(doctorId, parseInt(limit) || 100);
         }
 
         res.json({

@@ -1,13 +1,23 @@
 import express from 'express';
-import { authenticateToken } from '../middleware/auth.js';
+import { Doctor } from '../models/Doctor.js';
 import { Stats } from '../models/Stats.js';
 
 const router = express.Router();
 
 // Get dashboard stats
-router.get('/dashboard', authenticateToken, async (req, res) => {
+router.get('/dashboard', async (req, res) => {
     try {
-        const stats = await Stats.getDashboardStats(req.user.doctorId);
+        // Use authenticated doctor ID if available, otherwise use default seeded doctor
+        let doctorId = req.user?.doctorId;
+        
+        if (!doctorId) {
+            const doctors = await Doctor.findAll();
+            if (doctors.length > 0) {
+                doctorId = doctors[0].id;
+            }
+        }
+
+        const stats = await Stats.getDashboardStats(doctorId);
 
         res.json({
             success: true,
@@ -23,9 +33,19 @@ router.get('/dashboard', authenticateToken, async (req, res) => {
 });
 
 // Get sidebar stats
-router.get('/sidebar', authenticateToken, async (req, res) => {
+router.get('/sidebar', async (req, res) => {
     try {
-        const stats = await Stats.getSidebarStats(req.user.doctorId);
+        // Use authenticated doctor ID if available, otherwise use default seeded doctor
+        let doctorId = req.user?.doctorId;
+        
+        if (!doctorId) {
+            const doctors = await Doctor.findAll();
+            if (doctors.length > 0) {
+                doctorId = doctors[0].id;
+            }
+        }
+
+        const stats = await Stats.getSidebarStats(doctorId);
 
         res.json({
             success: true,
