@@ -57,6 +57,18 @@ router.get('/search-patient/:patientName', async (req, res) => {
     }
 });
 
+// Get all visits for a specific patient
+router.get('/patient/:patientId/visits', async (req, res) => {
+    try {
+        const { patientId } = req.params;
+        const visits = await Visit.getByPatient(patientId, 100);
+        res.json(visits);
+    } catch (error) {
+        console.error('Error fetching patient visits:', error);
+        res.status(500).json({ error: 'Failed to fetch patient visits' });
+    }
+});
+
 // Generate initial insights from patient's previous visits
 router.get('/patient/:patientId/initial-insights', async (req, res) => {
     try {
