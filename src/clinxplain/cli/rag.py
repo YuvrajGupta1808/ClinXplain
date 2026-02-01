@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CLI entrypoint for the RAG pipeline: ingest and query."""
+"""CLI for RAG pipeline: ingest, query, retrieve, eval."""
 
 from __future__ import annotations
 
@@ -7,17 +7,14 @@ import argparse
 import os
 import sys
 
-# Allow running as script from src/RAG or with PYTHONPATH=src
-if __name__ == "__main__" and "__file__" in dir():
-    _src = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-    if _src not in sys.path:
-        sys.path.insert(0, _src)
-
-from RAG import RAGPipeline, RAGConfig
+from clinxplain.rag import RAGConfig, RAGPipeline
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="RAG pipeline: ingest documents and query.")
+    parser = argparse.ArgumentParser(
+        prog="rag",
+        description="RAG pipeline: ingest documents and query.",
+    )
     sub = parser.add_subparsers(dest="command", required=True)
 
     ingest_parser = sub.add_parser("ingest", help="Ingest documents from a path")
@@ -35,8 +32,18 @@ def main() -> int:
     retrieve_parser.add_argument("--no-print", action="store_true", help="Do not print chunk text")
 
     eval_parser = sub.add_parser("eval", help="Run RAG evaluation with W&B Weave (tracing + LLM judge)")
-    eval_parser.add_argument("--project", type=str, default=None, help="Weave project (e.g. your-username/rag-eval). Default: WEAVE_PROJECT env or your W&B entity")
-    eval_parser.add_argument("--parallelism", type=int, default=None, help="Max parallel eval workers (e.g. 3 to avoid rate limits)")
+    eval_parser.add_argument(
+        "--project",
+        type=str,
+        default=None,
+        help="Weave project (e.g. your-username/rag-eval). Default: WEAVE_PROJECT env or your W&B entity",
+    )
+    eval_parser.add_argument(
+        "--parallelism",
+        type=int,
+        default=None,
+        help="Max parallel eval workers (e.g. 3 to avoid rate limits)",
+    )
 
     args = parser.parse_args()
     config = RAGConfig.from_env()
@@ -69,7 +76,7 @@ def main() -> int:
 
     if args.command == "eval":
         try:
-            from RAG.weave_eval import run_evaluation
+            from clinxplain.rag.weave_eval import run_evaluation
         except ImportError as e:
             print("Weave evaluation requires weave and wandb.", file=sys.stderr)
             print("Install with: uv add weave wandb", file=sys.stderr)
