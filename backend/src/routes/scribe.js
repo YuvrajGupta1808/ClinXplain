@@ -86,15 +86,23 @@ router.get('/patient/:patientId/initial-insights', async (req, res) => {
             return `Visit ${idx + 1}: ${visit.clinicalAssessment?.primaryDiagnosis || 'No Diagnosis'}`;
         }).join('\n');
         
-        const prompt = `Analyze patient ${patient.fullName} history and generate JSON:
-        { "recommendedQuestions": [], "differentialDiagnoses": [], "nextSteps": [] }
+        const prompt = `Analyze patient ${patient.fullName}'s history and generate a strict JSON object. Do not use Markdown.
+        JSON format: { "recommendedQuestions": ["Question 1", "Question 2"], "differentialDiagnoses": [{ "diagnosis": "Condition", "confidence": "High", "reasoning": "Why" }], "nextSteps": ["Step 1"] }
         Recent history: ${visitSummaries}`;
 
         const result = await model.generateContent(prompt);
         const text = result.response.text();
+        
+        // Extract JSON using regex in case of Markdown wrapping
         const jsonMatch = text.match(/\{[\s\S]*\}/);
-        res.json(jsonMatch ? JSON.parse(jsonMatch[0]) : { recommendedQuestions: [], differentialDiagnoses: [], nextSteps: [] });
+        if (jsonMatch) {
+             res.json(JSON.parse(jsonMatch[0]));
+        } else {
+             console.warn('Failed to parse Gemini JSON:', text);
+             res.json({ recommendedQuestions: [], differentialDiagnoses: [], nextSteps: [] });
+        }
     } catch (error) {
+        console.error('Initial insights detection error:', error);
         res.status(500).json({ error: 'Failed to generate insights' });
     }
 });
