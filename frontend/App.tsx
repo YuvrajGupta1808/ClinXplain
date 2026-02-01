@@ -79,6 +79,8 @@ const AppContent: React.FC = () => {
       setCurrentView('assistant');
     } else if (tab === 'Calendar') {
       setCurrentView('appointments');
+    } else if (tab === 'Research') {
+      setCurrentView('researcher');
     } else if (tab === 'Scribe') {
       // AI Scribe: Show VisitScreen with new patient if no active patient
       if (!activePatient) {
@@ -148,7 +150,11 @@ const AppContent: React.FC = () => {
           <AppointmentsScreen />
         )}
 
-        {!['cover', 'welcome', 'visits', 'assistant', 'patients', 'appointments'].includes(currentView) && (
+        {currentView === 'researcher' && (
+          <ResearcherScreen />
+        )}
+
+        {!['cover', 'welcome', 'visits', 'assistant', 'patients', 'appointments', 'researcher'].includes(currentView) && (
           <div className="flex-1 flex items-center justify-center bg-white m-4 rounded-3xl shadow-sm border border-blue-100 animate-fadeIn">
             <div className="text-center">
               <div className="w-20 h-20 bg-blue-50 text-blue-600 rounded-3xl flex items-center justify-center mx-auto mb-6">
