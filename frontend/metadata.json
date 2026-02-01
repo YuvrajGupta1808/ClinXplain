@@ -1,0 +1,7 @@
+{
+  "name": "ClinXplain - AI Medical Scribe",
+  "description": "A high-fidelity recreation of an AI medical scribe interface featuring real-time transcription simulation, AI diagnostic suggestions, and automated SOAP note generation using Gemini.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
