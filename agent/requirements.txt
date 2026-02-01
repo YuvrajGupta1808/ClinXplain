@@ -3,3 +3,5 @@ python-dotenv
 loguru
 google-generativeai
 daily-python>=0.10.0
+weave>=0.51.0
+wandb>=0.18.0

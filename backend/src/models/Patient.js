@@ -7,8 +7,11 @@ export class Patient {
         fullName, 
         dateOfBirth, 
         gender = 'Unknown',
+        bloodType = '',
         contactInfo = {},
-        insuranceInfo = {}
+        insuranceInfo = {},
+        medicalHistory = {},
+        emergencyContact = {}
     }) {
         const patientId = uuidv4();
         
@@ -23,6 +26,7 @@ export class Patient {
             avatarInitials,
             dateOfBirth: dateOfBirth || '',
             gender,
+            bloodType: bloodType || '',
             contactInfo: {
                 phone: contactInfo.phone || '',
                 email: contactInfo.email || '',
@@ -30,13 +34,20 @@ export class Patient {
             },
             insuranceInfo: {
                 provider: insuranceInfo.provider || '',
-                memberId: insuranceInfo.memberId || ''
+                memberId: insuranceInfo.memberId || '',
+                groupNumber: insuranceInfo.groupNumber || ''
             },
             medicalHistory: {
-                conditions: [],
-                surgeries: [],
-                medications: [],
-                allergies: []
+                conditions: medicalHistory.conditions || [],
+                surgeries: medicalHistory.surgeries || [],
+                medications: medicalHistory.medications || [],
+                allergies: medicalHistory.allergies || [],
+                familyHistory: medicalHistory.familyHistory || []
+            },
+            emergencyContact: {
+                name: emergencyContact.name || '',
+                relationship: emergencyContact.relationship || '',
+                phone: emergencyContact.phone || ''
             },
             lastVisit: 'No visits yet',
             createdAt: new Date().toISOString()

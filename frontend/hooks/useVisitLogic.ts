@@ -1,4 +1,3 @@
-import DailyIframe from '@daily-co/daily-js';
 import { useEffect, useRef, useState } from 'react';
 import { AiSuggestion, Patient, TranscriptEntry } from '../types';
 
@@ -102,19 +101,91 @@ export const useVisitLogic = (patient: Patient, user: any) => {
                 const { startScribeSession } = await import('../services/scribeService');
                 const session = await startScribeSession(user?.id || "doctor-1", patient.id);
                 setVisit((prev: any) => ({ ...prev, visitId: session.visitId, status: 'in-progress' }));
-                if (!callObjectRef.current) {
-                    callObjectRef.current = DailyIframe.createCallObject({ audioSource: true, videoSource: false });
-                }
-                await callObjectRef.current.join({ url: session.roomUrl, token: session.token, userName: user?.name });
+
+                console.log('📝 Visit session created:', session.visitId);
                 setIsRecording(true);
+
+                // Use browser's MediaRecorder with Deepgram WebSocket
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+
+                    // Connect to Deepgram WebSocket
+                    const deepgramWs = new WebSocket('wss://api.deepgram.com/v1/listen?model=nova-2&language=en&smart_format=true', [
+                        'token',
+                        '609273b7f977f314b5679a2f5e8d210d45aa421b'
+                    ]);
+
+                    deepgramWs.onopen = () => {
+                        console.log('🎙️ Connected to Deepgram');
+                        mediaRecorder.start(250); // Send data every 250ms
+                    };
+
+                    deepgramWs.onmessage = async (message) => {
+                        const data = JSON.parse(message.data);
+                        if (data.channel?.alternatives?.[0]?.transcript) {
+                            const transcript = data.channel.alternatives[0].transcript;
+                            if (transcript.trim()) {
+                                console.log('📝 Transcribed:', transcript);
+                                // Send to backend
+                                try {
+                                    await fetch(`http://localhost:3001/api/scribe/visit/${session.visitId}/transcript`, {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({
+                                            speaker: user?.name || 'Doctor',
+                                            text: transcript
+                                        })
+                                    });
+                                } catch (e) {
+                                    console.error('Failed to send transcript:', e);
+                                }
+                            }
+                        }
+                    };
+
+                    deepgramWs.onerror = (error) => {
+                        console.error('Deepgram error:', error);
+                    };
+
+                    mediaRecorder.ondataavailable = (event) => {
+                        if (event.data.size > 0 && deepgramWs.readyState === WebSocket.OPEN) {
+                            deepgramWs.send(event.data);
+                        }
+                    };
+
+                    callObjectRef.current = {
+                        mediaRecorder,
+                        deepgramWs,
+                        stream,
+                        leave: () => {
+                            mediaRecorder.stop();
+                            deepgramWs.close();
+                            stream.getTracks().forEach(track => track.stop());
+                        },
+                        destroy: () => { }
+                    };
+
+                    console.log('✅ Recording started with Deepgram transcription');
+                } catch (error) {
+                    console.error('Failed to start recording:', error);
+                    alert('Failed to access microphone. Please allow microphone permissions.');
+                    setIsRecording(false);
+                }
             } catch (e) {
                 console.error("Failed to start session", e);
                 alert("Failed to start recording session.");
             }
         } else {
             if (callObjectRef.current) {
-                await callObjectRef.current.leave();
-                await callObjectRef.current.destroy();
+                try {
+                    await callObjectRef.current.leave();
+                    if (callObjectRef.current.destroy) {
+                        await callObjectRef.current.destroy();
+                    }
+                } catch (e) {
+                    console.warn('Error stopping recording:', e);
+                }
                 callObjectRef.current = null;
             }
             setIsRecording(false);
@@ -132,20 +203,29 @@ export const useVisitLogic = (patient: Patient, user: any) => {
                 currentVisitId = session.visitId;
                 setVisit((prev: any) => ({ ...prev, visitId: currentVisitId, status: 'in-progress' }));
             }
+
+            // Call regenerate endpoint which will generate from previous visits if no transcript
+            console.log('🔔 Generating clinical note from previous visits...');
             const response = await fetch(`http://localhost:3001/api/scribe/visit/${currentVisitId}/regenerate`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' }
             });
+
             if (response.ok) {
-                setVisit(await response.json());
-                setNotification('Clinical Note Regenerated Successfully');
+                const generatedVisit = await response.json();
+                console.log('✅ Clinical note generated successfully');
+                setVisit(generatedVisit);
+                if (generatedVisit.transcript) setTranscript(generatedVisit.transcript);
+                setNotification('Clinical note generated from previous visits');
                 setTimeout(() => setNotification(null), 3000);
             } else {
-                const { getVisitData } = await import('../services/scribeService');
-                setVisit(await getVisitData(currentVisitId));
+                const error = await response.json();
+                console.error('❌ Failed to generate note:', error);
+                alert(error.error || 'Failed to generate note');
             }
         } catch (e) {
-            console.error('❌ Failed to regenerate note:', e);
+            console.error('❌ Failed to generate note:', e);
+            alert('Failed to generate note: ' + (e as Error).message);
         } finally {
             setIsGenerating(false);
         }

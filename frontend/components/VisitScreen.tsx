@@ -3,6 +3,7 @@ import React from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useVisitLogic } from '../hooks/useVisitLogic';
 import { Patient, PatientHistory } from '../types';
+import AgentFeedbackPanel from './AgentFeedbackPanel';
 import AttachmentsPanel from './AttachmentsPanel';
 import InsightsPanel from './InsightsPanel';
 import NotePanel from './NotePanel';
@@ -51,6 +52,17 @@ const VisitScreen: React.FC<VisitScreenProps> = ({
         />
 
         <div className="w-1/2 bg-white flex flex-col h-full relative border-l border-slate-100">
+            {/* Agent Feedback Panel - for rating AI outputs */}
+            {visit?.visitId && (
+                <div className="p-3 border-b border-slate-100">
+                    <AgentFeedbackPanel 
+                        visitId={visit.visitId} 
+                        visitData={visit}
+                        onFeedbackSubmit={(feedback) => console.log('Feedback:', feedback)}
+                    />
+                </div>
+            )}
+            
             <div className="flex bg-white">
                 {['note', 'transcript', 'attachments'].map((tab) => (
                     <button 

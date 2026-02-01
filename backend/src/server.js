@@ -4,11 +4,13 @@ import express from 'express';
 import { connectRedis } from './config/redis.js';
 
 // Import routes
+import agentRoutes from './routes/agent.js';
 import appointmentRoutes from './routes/appointments.js';
 import authRoutes from './routes/auth.js';
 import patientRoutes from './routes/patients.js';
 import scribeRoutes from './routes/scribe.js';
 import statsRoutes from './routes/stats.js';
+import visitRoutes from './routes/visits.js';
 
 dotenv.config();
 
@@ -43,8 +45,10 @@ app.get('/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/patients', patientRoutes);
 app.use('/api/appointments', appointmentRoutes);
+app.use('/api/visits', visitRoutes);
 app.use('/api/stats', statsRoutes);
 app.use('/api/scribe', scribeRoutes);
+app.use('/api/agent', agentRoutes);  // Self-evolving agent feedback
 
 // 404 handler
 app.use((req, res) => {

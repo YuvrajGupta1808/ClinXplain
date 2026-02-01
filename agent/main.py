@@ -1,16 +1,26 @@
 """
-Simplified Medical Scribe Agent using Daily and Gemini APIs directly.
-No Pipecat dependency issues.
+Self-Evolving Medical Scribe Agent with W&B Weave Integration
+
+This agent:
+1. Logs all extractions to W&B Weave for tracing
+2. Accepts doctor ratings on clinical outputs
+3. Learns from feedback to improve prompts
+4. Evolves its system prompt based on patterns
 """
 import asyncio
 import os
 import sys
 import json
 import aiohttp
+from datetime import datetime
+from typing import Optional, List, Dict, Any
 from dotenv import load_dotenv
 from loguru import logger
 import google.generativeai as genai
 from daily import Daily, CallClient, EventHandler
+
+# W&B Weave for self-evolution
+import weave
 
 load_dotenv()
 
@@ -18,28 +28,152 @@ load_dotenv()
 logger.remove()
 logger.add(sys.stderr, level="INFO")
 
+# Initialize W&B Weave
+WANDB_PROJECT = "medical-scribe-agent"
+weave_client = None
+
+def init_weave():
+    """Initialize W&B Weave for tracing."""
+    global weave_client
+    try:
+        weave_client = weave.init(WANDB_PROJECT)
+        logger.info(f"🧬 W&B Weave initialized: {WANDB_PROJECT}")
+        return weave_client
+    except Exception as e:
+        logger.warning(f"⚠️ W&B Weave init failed: {e}")
+        return None
+
+
+class EvolutionEngine:
+    """
+    Manages agent evolution based on feedback.
+    
+    Tracks:
+    - Good patterns (high-rated outputs)
+    - Bad patterns (low-rated outputs)
+    - Performance metrics over time
+    """
+    
+    def __init__(self, backend_url: str):
+        self.backend_url = backend_url
+        self.prompt_version = 1
+        self.learned_good_patterns: List[str] = []
+        self.learned_bad_patterns: List[str] = []
+        self.total_ratings = 0
+        self.rating_sum = 0
+        self.evolution_history: List[Dict] = []
+        
+    async def load_feedback_from_backend(self):
+        """Load historical feedback from backend to initialize learning."""
+        try:
+            async with aiohttp.ClientSession() as session:
+                url = f"{self.backend_url}/api/agent/feedback/history"
+                async with session.get(url) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        self.learned_good_patterns = data.get('goodPatterns', [])[-10:]
+                        self.learned_bad_patterns = data.get('badPatterns', [])[-10:]
+                        self.total_ratings = data.get('totalRatings', 0)
+                        self.rating_sum = data.get('ratingSum', 0)
+                        self.prompt_version = data.get('promptVersion', 1)
+                        logger.info(f"📚 Loaded evolution state: v{self.prompt_version}, "
+                                   f"{len(self.learned_good_patterns)} good, "
+                                   f"{len(self.learned_bad_patterns)} bad patterns")
+        except Exception as e:
+            logger.warning(f"⚠️ Could not load feedback history: {e}")
+    
+    def process_feedback(self, rating: int, comment: str, field: str = ""):
+        """Process new feedback and update learning."""
+        self.total_ratings += 1
+        self.rating_sum += rating
+        
+        feedback_text = f"{field}: {comment}" if field else comment
+        
+        if rating >= 4 and comment:
+            self.learned_good_patterns.append(feedback_text)
+            self.learned_good_patterns = self.learned_good_patterns[-10:]  # Keep last 10
+            logger.info(f"✅ Learned good pattern: {feedback_text}")
+        elif rating <= 2 and comment:
+            self.learned_bad_patterns.append(feedback_text)
+            self.learned_bad_patterns = self.learned_bad_patterns[-10:]
+            logger.info(f"📝 Learned to avoid: {feedback_text}")
+        
+        # Evolve every 5 ratings
+        if self.total_ratings % 5 == 0:
+            self.prompt_version += 1
+            avg = self.rating_sum / self.total_ratings if self.total_ratings > 0 else 0
+            self.evolution_history.append({
+                'version': self.prompt_version,
+                'timestamp': datetime.now().isoformat(),
+                'avg_rating': avg,
+                'good_patterns': len(self.learned_good_patterns),
+                'bad_patterns': len(self.learned_bad_patterns)
+            })
+            logger.info(f"🧬 EVOLVED to prompt version {self.prompt_version}!")
+    
+    def get_evolution_context(self) -> str:
+        """Generate evolution context to inject into prompts."""
+        context = ""
+        
+        if self.learned_good_patterns:
+            context += "\n\n## LEARNED GOOD PATTERNS (doctors liked these):\n"
+            for pattern in self.learned_good_patterns[-5:]:
+                context += f"✓ {pattern}\n"
+        
+        if self.learned_bad_patterns:
+            context += "\n\n## PATTERNS TO AVOID (doctors disliked these):\n"
+            for pattern in self.learned_bad_patterns[-5:]:
+                context += f"✗ {pattern}\n"
+        
+        if self.total_ratings > 0:
+            avg = self.rating_sum / self.total_ratings
+            context += f"\n\n## PERFORMANCE: {avg:.1f}/5 avg rating ({self.total_ratings} ratings)\n"
+            if avg < 3:
+                context += "⚠️ Focus on accuracy and clinical detail!\n"
+            elif avg >= 4:
+                context += "✅ Maintain quality, continue current approach.\n"
+        
+        return context
+    
+    def get_stats(self) -> Dict:
+        """Get current evolution statistics."""
+        return {
+            'promptVersion': self.prompt_version,
+            'totalRatings': self.total_ratings,
+            'averageRating': self.rating_sum / self.total_ratings if self.total_ratings > 0 else 0,
+            'goodPatternsCount': len(self.learned_good_patterns),
+            'badPatternsCount': len(self.learned_bad_patterns),
+            'goodPatterns': self.learned_good_patterns[-5:],
+            'badPatterns': self.learned_bad_patterns[-5:],
+            'evolutionHistory': self.evolution_history[-5:]
+        }
+
 
 class MedicalScribeAgent:
     """Medical scribe agent that listens to conversations and extracts clinical data."""
     
-    def __init__(self, backend_url: str, visit_id: str, patient_id: str, doctor_name: str = "Doctor", patient_name: str = "Patient"):
+    def __init__(self, backend_url: str, visit_id: str, patient_id: str, 
+                 doctor_name: str = "Doctor", patient_name: str = "Patient"):
         self.backend_url = backend_url
         self.visit_id = visit_id
         self.patient_id = patient_id
         self.doctor_name = doctor_name
         self.patient_name = patient_name
-        self.conversation_buffer = []  # For LLM
+        self.conversation_buffer = []
         self.last_update_time = asyncio.get_event_loop().time()
         
-        # Fetch patient context from database
+        # Patient context
         self.patient_context = None
-        self.previous_visits = []  # Store previous visit history
+        self.previous_visits = []
         
-        # New: Pause-based buffering for frontend
+        # Live buffering
         self.live_buffer = []
         self.last_message_time = 0
-        self.flush_threshold = 2.5  # 2.5 second pause
+        self.flush_threshold = 2.5
         self.flush_task = None
+        
+        # Evolution engine for self-improvement
+        self.evolution = EvolutionEngine(backend_url)
         
         # Configure Gemini
         api_key = os.getenv("GOOGLE_API_KEY")
@@ -48,7 +182,6 @@ class MedicalScribeAgent:
         
         genai.configure(api_key=api_key)
         
-        # Create generative model
         self.model = genai.GenerativeModel(
             'gemini-2.5-flash-lite',
             generation_config={
@@ -62,287 +195,162 @@ class MedicalScribeAgent:
         
         self.chat = self.model.start_chat(history=[])
     
+    async def initialize(self):
+        """Async initialization - load feedback history."""
+        await self.evolution.load_feedback_from_backend()
+        await self._fetch_patient_context()
+        
+        # Reinitialize model with evolved prompt
+        self.model = genai.GenerativeModel(
+            'gemini-2.5-flash-lite',
+            generation_config={
+                "temperature": 0.1,
+                "top_p": 0.95,
+                "top_k": 40,
+                "max_output_tokens": 2048,
+            },
+            system_instruction=self._get_system_instruction()
+        )
+        self.chat = self.model.start_chat(history=[])
+        
+        logger.info(f"🧬 Agent initialized with prompt v{self.evolution.prompt_version}")
+        
     async def _fetch_patient_context(self):
-        """Fetch patient medical history and previous visits from backend for AI context."""
+        """Fetch patient medical history and previous visits."""
         try:
             async with aiohttp.ClientSession() as session:
-                # Fetch patient medical history
                 url = f"{self.backend_url}/api/patients/{self.patient_id}"
                 async with session.get(url) as response:
                     if response.status == 200:
                         self.patient_context = await response.json()
                         logger.info(f"✅ Loaded patient context for {self.patient_name}")
-                        if self.patient_context.get('medicalHistory'):
-                            history = self.patient_context['medicalHistory']
-                            if history.get('conditions'):
-                                logger.info(f"   Conditions: {', '.join(history['conditions'][:3])}")
-                            if history.get('medications'):
-                                logger.info(f"   Medications: {', '.join(history['medications'][:3])}")
-                            if history.get('allergies'):
-                                logger.info(f"   ⚠️  Allergies: {', '.join(history['allergies'])}")
-                    else:
-                        logger.warning(f"⚠️ Could not fetch patient context (status {response.status})")
                 
-                # Fetch previous visits
                 visits_url = f"{self.backend_url}/api/scribe/patient/{self.patient_id}/visits"
                 async with session.get(visits_url) as visits_response:
                     if visits_response.status == 200:
                         visits = await visits_response.json()
-                        # Store up to 3 most recent visits (excluding current one)
                         self.previous_visits = [v for v in visits[:3] if v.get('visitId') != self.visit_id]
                         if self.previous_visits:
-                            logger.info(f"📋 Loaded {len(self.previous_visits)} previous visits for AI context")
-                            for i, visit in enumerate(self.previous_visits[:2]):
-                                diagnosis = visit.get('clinicalAssessment', {}).get('primaryDiagnosis', 'Not recorded')
-                                logger.info(f"   Visit {i+1}: {diagnosis}")
-                        else:
-                            logger.info("📋 No previous visits found")
-                    else:
-                        logger.warning(f"⚠️ Could not fetch previous visits (status {visits_response.status})")
-                        self.previous_visits = []
-                        
+                            logger.info(f"📋 Loaded {len(self.previous_visits)} previous visits")
         except Exception as e:
             logger.error(f"❌ Error fetching patient context: {e}")
-            self.previous_visits = []
         
     def _get_system_instruction(self) -> str:
-        # Build patient context section if available
+        """Build system instruction with evolution context."""
+        
+        # Patient context
         patient_context_section = ""
         if self.patient_context and self.patient_context.get('medicalHistory'):
             history = self.patient_context['medicalHistory']
             context_parts = []
-            
             if history.get('conditions'):
                 context_parts.append(f"Chronic Conditions: {', '.join(history['conditions'])}")
             if history.get('medications'):
                 context_parts.append(f"Current Medications: {', '.join(history['medications'])}")
             if history.get('allergies'):
                 context_parts.append(f"⚠️ ALLERGIES: {', '.join(history['allergies'])}")
-            if history.get('surgeries'):
-                context_parts.append(f"Past Surgeries: {', '.join(history['surgeries'])}")
-            
             if context_parts:
-                patient_context_section = f"\n\nPATIENT MEDICAL HISTORY CONTEXT:\n" + "\n".join(context_parts)
+                patient_context_section = f"\n\nPATIENT MEDICAL HISTORY:\n" + "\n".join(context_parts)
         
-        # Build previous visits section
+        # Previous visits
         previous_visits_section = ""
         if self.previous_visits:
             visits_parts = []
             for i, visit in enumerate(self.previous_visits[:3]):
-                visit_date = visit.get('visitDate', visit.get('createdAt', 'Unknown date'))
-                chief_complaint = visit.get('chiefComplaint', {}).get('primaryConcern', 'Not recorded')
-                diagnosis = visit.get('clinicalAssessment', {}).get('primaryDiagnosis', 'Not recorded')
-                meds = visit.get('medications', [])
-                med_names = ', '.join([m.get('name', '') for m in meds[:3]]) if meds else 'None'
-                
-                visits_parts.append(f"Visit {i+1} ({visit_date}):\n  - Chief Complaint: {chief_complaint}\n  - Diagnosis: {diagnosis}\n  - Medications: {med_names}")
-            
+                visit_date = visit.get('visitDate', visit.get('createdAt', 'Unknown'))
+                diagnosis = visit.get('clinicalAssessment', {}).get('primaryDiagnosis', 'N/A')
+                visits_parts.append(f"Visit {i+1} ({visit_date}): {diagnosis}")
             if visits_parts:
-                previous_visits_section = f"\n\nPREVIOUS VISIT HISTORY (use this to inform your diagnosis):\n" + "\n".join(visits_parts)
+                previous_visits_section = f"\n\nPREVIOUS VISITS:\n" + "\n".join(visits_parts)
         
-        return f"""You are a medical scribe AI assistant. Your task is to extract clinical data AND generate real-time clinical insights from a conversation between a doctor ({self.doctor_name}) and a patient ({self.patient_name}).{patient_context_section}{previous_visits_section}
+        # Evolution context - THIS IS THE KEY SELF-IMPROVEMENT PART
+        evolution_context = self.evolution.get_evolution_context()
+        
+        base_instruction = f"""You are a medical scribe AI assistant (v{self.evolution.prompt_version}). 
+Extract clinical data from conversations between {self.doctor_name} and {self.patient_name}.
+{patient_context_section}{previous_visits_section}{evolution_context}
 
-The conversation you receive will have speaker labels. If a label says "Unknown", use the context of the speech to determine if it's the doctor or the patient.
-
-IMPORTANT: Use the previous visit history and patient medical history to provide better clinical reasoning. If current symptoms match or relate to previous diagnoses, mention this in your assessment.
-
-Output ONLY valid JSON in this format:
+Output ONLY valid JSON:
 {{
   "chiefComplaint": {{"primaryConcern": "", "duration": "", "severity": ""}},
-  "symptoms": [{{ "name": "", "onsetDate": "", "severityScale": 5, "frequency": "" }}],
+  "symptoms": [{{"name": "", "onsetDate": "", "severityScale": 5, "frequency": ""}}],
   "vitals": {{"bloodPressure": "", "heartRate": "", "temperature": ""}},
-  "medications": [{{ "name": "", "dosage": "", "frequency": "" }}],
-  "clinicalAssessment": {{"primaryDiagnosis": "", "confidenceLevel": "Medium"}},
+  "medications": [{{"name": "", "dosage": "", "frequency": ""}}],
+  "clinicalAssessment": {{"primaryDiagnosis": "", "confidenceLevel": "Medium", "clinicalReasoning": ""}},
   "planOfCare": {{"medicationsPrescribed": [], "lifestyleRecommendations": []}},
   "insights": {{
-    "recommendedQuestions": ["Question 1?", "Question 2?"],
-    "differentialDiagnoses": [
-      {{"diagnosis": "Condition name", "confidence": "High/Medium/Low", "reasoning": "Based on previous history and current symptoms"}}
-    ],
-    "nextSteps": ["Protocol or action item 1", "Protocol or action item 2"]
+    "recommendedQuestions": [],
+    "differentialDiagnoses": [{{"diagnosis": "", "confidence": "", "reasoning": ""}}],
+    "nextSteps": []
   }}
 }}
 
 Rules:
-- Output ONLY the JSON object, nothing else.
-- Update fields as information becomes available during the conversation.
-- Use empty strings/arrays for unknown values.
-- If a speaker is identified as "Unknown", reason about who they are based on medical roles.
-- Consider previous visit history when making diagnostic decisions.
-
-For insights generation:
-- recommendedQuestions: Suggest 3-5 follow-up questions the doctor should ask based on gaps AND previous visit outcomes
-- differentialDiagnoses: List 2-3 most likely diagnoses with confidence levels and clinical reasoning that considers BOTH current symptoms AND previous visit history
-- nextSteps: Recommend relevant protocols, screenings, or actions based on symptoms and previous treatments (e.g., "Follow up on previous Influenza A diagnosis", "Order CBC panel")
+- Output ONLY JSON, no markdown
+- Use medical abbreviations (h/o, HTN, DM, BID, PO, PRN)
+- Be specific with diagnoses
+- Include clinical reasoning (2-3 sentences)
 """
+        return base_instruction
     
     async def process_audio_transcript(self, speaker: str, text: str):
         """Process transcribed audio and extract clinical data."""
-        # Use speaker name for LLM context
         self.conversation_buffer.append(f"{speaker}: {text}")
-        
-        # Manage the live buffer for segmented frontend display
         self.live_buffer.append(text)
         self.last_message_time = asyncio.get_event_loop().time()
         
-        # Cancel any previous flush task
         if self.flush_task:
             self.flush_task.cancel()
-            
-        # Schedule a new flush task
         self.flush_task = asyncio.create_task(self._wait_and_flush())
         
-        # Extract data every 30 seconds or when buffer has enough content
         current_time = asyncio.get_event_loop().time()
         if (current_time - self.last_update_time > 30) or (len(self.conversation_buffer) >= 5):
             await self._extract_and_send()
             self.last_update_time = current_time
             
     async def _wait_and_flush(self):
-        """Wait for the pause threshold and then send the buffered text to backend."""
+        """Wait for pause and send buffered text."""
         try:
             await asyncio.sleep(self.flush_threshold)
-            
-            # If we reached here without being cancelled, a pause occurred
             full_text = " ".join(self.live_buffer).strip()
             if full_text:
-                logger.info(f"🎙️ Sending segmented block: {full_text[:50]}...")
-                # No naming convention: send empty speaker
+                logger.info(f"🎙️ Sending segment: {full_text[:50]}...")
                 await self._send_transcript_to_backend("", full_text)
                 self.live_buffer = []
-                
         except asyncio.CancelledError:
-            pass # We were pre-empted by more speech
+            pass
     
     async def _send_transcript_to_backend(self, speaker: str, text: str):
-        """Send transcript segment to backend for real-time display."""
+        """Send transcript segment to backend."""
         try:
             url = f"{self.backend_url}/api/scribe/visit/{self.visit_id}/transcript"
-            payload = {
-                "speaker": speaker,
-                "text": text
-            }
-            
             async with aiohttp.ClientSession() as session:
-                async with session.post(url, json=payload) as response:
+                async with session.post(url, json={"speaker": speaker, "text": text}) as response:
                     if response.status == 200:
-                        logger.debug(f"✅ Transcript segment saved: {text[:30]}...")
-                    else:
-                        error_text = await response.text()
-                        logger.error(f"❌ Failed to save transcript: {error_text}")
+                        logger.debug(f"✅ Transcript saved")
         except Exception as e:
-            logger.error(f"❌ Error sending transcript to backend: {e}")
+            logger.error(f"❌ Error sending transcript: {e}")
 
-    async def _extract_and_send(self):
-        """Extract clinical data from conversation buffer."""
+    @weave.op()
+    async def _extract_and_send(self, force=False):
+        """Extract clinical data with W&B Weave tracing."""
         if not self.conversation_buffer:
             return
         
         try:
-            # Combine FULL conversation context
-            conversation = "\n".join(self.conversation_buffer)  # ALL messages for comprehensive analysis
+            conversation = "\n".join(self.conversation_buffer)
             
-            # Build COMPREHENSIVE context from previous visits
-            previous_visit_context = ""
-            current_medications = []
-            if self.previous_visits:
-                visit_summaries = []
-                for i, visit in enumerate(self.previous_visits[:3]):
-                    date = visit.get('visitDate', visit.get('createdAt', 'Unknown'))
-                    chief_complaint = visit.get('chiefComplaint', {}).get('primaryConcern', 'N/A')
-                    diagnosis = visit.get('clinicalAssessment', {}).get('primaryDiagnosis', 'N/A')
-                    reasoning = visit.get('clinicalAssessment', {}).get('clinicalReasoning', '')
-                    
-                    # Get medications from previous visits
-                    prev_meds = visit.get('medications', [])
-                    for med in prev_meds:
-                        med_name = med.get('name', '')
-                        if med_name and med_name not in [m.get('name') for m in current_medications]:
-                            current_medications.append(med)
-                    
-                    visit_summary = f"""Visit {i+1} ({date}):
-  Chief Complaint: {chief_complaint}
-  Diagnosis: {diagnosis}
-  Clinical Reasoning: {reasoning or 'Not documented'}
-  Medications: {', '.join([m.get('name', '') for m in prev_meds]) if prev_meds else 'None'}"""
-                    visit_summaries.append(visit_summary)
-                
-                if visit_summaries:
-                    previous_visit_context = f"\n\nPREVIOUS VISIT HISTORY (for deep analysis):\n" + "\n\n".join(visit_summaries)
-            
-            # Patient medical history context
-            patient_history_context = ""
-            if self.patient_context and self.patient_context.get('medicalHistory'):
-                history = self.patient_context['medicalHistory']
-                patient_history_context = f"\n\nPATIENT MEDICAL HISTORY:\n"
-                if history.get('conditions'):
-                    patient_history_context += f"Chronic Conditions: {', '.join(history['conditions'])}\n"
-                if history.get('allergies'):
-                    patient_history_context += f"⚠️ ALLERGIES: {', '.join(history['allergies'])}\n"
-            
-            
-            # Generate PROFESSIONAL MEDICAL DOCUMENTATION
-            prompt = f"""You are an expert physician documenting a clinical encounter. Generate comprehensive, professional medical documentation that would meet hospital standards.
+            prompt = f"""Extract clinical data from this conversation:
 
-PATIENT: {self.patient_name}
-PHYSICIAN: {self.doctor_name}{patient_history_context}{previous_visit_context}
-
-CURRENT ENCOUNTER TRANSCRIPT:
 {conversation}
 
----
-
-**DOCUMENTATION STANDARDS:**
-
-1. **Chief Complaint & HPI**: Use medical terminology, be specific
-   Example: "45F with h/o HTN presents with severe bilateral throbbing headache x 3 days, 8/10 severity, worse in AM upon waking. Associated nausea and photophobia. Denies fever, neck stiffness, vision changes. Reports medication non-compliance with lisinopril x 2 weeks."
-
-2. **Symptoms**: Consolidate duplicates - list each unique symptom ONCE
-   Format: "Headache: bilateral, throbbing, 8/10 severity, onset 3 days ago, constant, worse upon waking"
-
-3. **Vitals**: Extract ALL with proper units (BP: \"165/95 mmHg\", HR: \"88 bpm\", Temp: \"98.4°F\")
-
-4. **Medications**: Include from PREVIOUS visits if still relevant + any new ones
-   Format: \"Lisinopril 10mg PO daily\", \"Ibuprofen 600mg PO q6h PRN headache\"
-
-5. **Primary Diagnosis**: Be SPECIFIC with etiology
-   Not: \"Headache\"
-   Yes: \"Hypertensive headache secondary to medication non-compliance\"
-
-6. **Clinical Reasoning**: Write 2-3 professional sentences:
-   - Key findings supporting diagnosis
-   - Why this diagnosis is most likely  
-   - What was ruled out
-   - Connection to previous visits
-   Example: \"Patient's elevated BP (165/95 vs baseline 130/80) in setting of recent medication non-compliance strongly suggests hypertensive etiology. The bilateral throbbing nature and AM predominance are consistent with increased intracranial pressure from elevated BP. Absence of neurological deficits and negative red flags make SAH/meningitis unlikely.\"
-
-7. **Plan**: SPECIFIC and ACTIONABLE
-   Medications: \"Resume lisinopril 10mg PO daily\", \"Ibuprofen 600mg PO q6h PRN\"
-   Follow-up: \"RTC in 1 week to reassess BP control\"
-   Lifestyle: \"Reduce sodium <2g/day, increase physical activity 30min daily\"
-   Labs: \"Order A1C, CMP, lipid panel\"
-
-8. **Differential Diagnoses**: 2-3 alternatives with confidence + reasoning
-
-**CRITICAL:**
-✓ Use medical abbreviations (h/o, HTN, DM, x, BID, PO, PRN)
-✓ NO duplicate symptoms
-✓ Include meds from previous visits if patient still on them  
-✓ Primary diagnosis must be specific with context
-✓ Clinical reasoning must be 2-3 detailed sentences
-✓ Plan must have specific doses/routes/frequencies
-✓ Extract ALL vitals with proper units
-
-Output JSON only (no markdown):"""
+Generate comprehensive JSON with all clinical fields including insights."""
             
-            logger.info("🤖 Asking Gemini to extract ALL clinical data...")
+            logger.info(f"🤖 Extracting clinical data (prompt v{self.evolution.prompt_version})...")
             response = await asyncio.to_thread(self.chat.send_message, prompt)
             
-            # Parse response
             response_text = response.text.strip()
-            logger.debug(f"Gemini response length: {len(response_text)}")
             
-            # Extract JSON from response
             if '{' in response_text and '}' in response_text:
                 start = response_text.find('{')
                 end = response_text.rfind('}') + 1
@@ -350,39 +358,72 @@ Output JSON only (no markdown):"""
                 
                 data = json.loads(json_str)
                 
-                # Validate and log what we extracted
+                # Add evolution metadata
+                data['_evolution'] = {
+                    'promptVersion': self.evolution.prompt_version,
+                    'timestamp': datetime.now().isoformat()
+                }
+                
                 diagnosis = data.get('clinicalAssessment', {}).get('primaryDiagnosis', '')
-                plan = data.get('planOfCare', {})
-                symptoms_count = len(data.get('symptoms', []))
-                meds_count = len(data.get('medications', []))
+                logger.info(f"✅ Extracted (v{self.evolution.prompt_version}): {diagnosis or 'No diagnosis'}")
                 
-                logger.info(f"✅ Extracted: {symptoms_count} symptoms, {meds_count} meds")
-                logger.info(f"   Diagnosis: {diagnosis or '❌ EMPTY'}")
-                logger.info(f"   Plan: {'✓' if plan.get('medicationsPrescribed') or plan.get('lifestyleRecommendations') else '❌ EMPTY'}")
-                
-                # Send to backend (frontend polls for updates)
                 await self._send_to_backend(data)
+                
+                return data
             else:
-                logger.warning("⚠️ No JSON found in Gemini response")
-                logger.warning(f"Response was: {response_text[:200]}")
+                logger.warning("⚠️ No JSON in response")
+                return None
                 
         except Exception as e:
             logger.error(f"❌ Extraction error: {e}")
+            return None
     
     async def _send_to_backend(self, data: dict):
         """Send extracted data to backend."""
         try:
             url = f"{self.backend_url}/api/scribe/visit/{self.visit_id}/save"
-            
             async with aiohttp.ClientSession() as session:
                 async with session.post(url, json=data) as response:
                     if response.status == 200:
-                        logger.info(f"✅ Backend updated visit {self.visit_id}")
-                    else:
-                        error = await response.text()
-                        logger.error(f"❌ Backend error ({response.status}): {error}")
+                        logger.info(f"✅ Backend updated")
         except Exception as e:
             logger.error(f"❌ Failed to send to backend: {e}")
+    
+    async def handle_feedback(self, rating: int, comment: str, field: str = ""):
+        """Handle feedback from doctor and update evolution."""
+        self.evolution.process_feedback(rating, comment, field)
+        
+        # Save feedback to backend for persistence
+        try:
+            url = f"{self.backend_url}/api/agent/feedback"
+            payload = {
+                'visitId': self.visit_id,
+                'rating': rating,
+                'comment': comment,
+                'field': field,
+                'promptVersion': self.evolution.prompt_version,
+                'timestamp': datetime.now().isoformat()
+            }
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url, json=payload) as response:
+                    if response.status == 200:
+                        logger.info(f"✅ Feedback saved: {rating}/5 - {comment}")
+        except Exception as e:
+            logger.error(f"❌ Failed to save feedback: {e}")
+        
+        # Log to W&B Weave
+        if weave_client:
+            try:
+                calls = list(weave_client.get_calls(limit=1))
+                if calls:
+                    calls[0].feedback.add("doctor_rating", {
+                        "rating": rating,
+                        "comment": comment,
+                        "field": field,
+                        "promptVersion": self.evolution.prompt_version
+                    })
+            except Exception as e:
+                logger.warning(f"⚠️ Could not log to Weave: {e}")
 
 
 class DailyEventHandler(EventHandler):
@@ -392,44 +433,28 @@ class DailyEventHandler(EventHandler):
         super().__init__()
         self.scribe = scribe
         self.loop = loop
-        self.participants = {} # Mapping of user_id to userName
+        self.participants = {}
         
     def on_transcription_message(self, message):
-        """Handle transcription from Daily."""
         if isinstance(message, dict):
             user_id = message.get('user_id', 'Unknown')
             text = message.get('text', '')
-            
-            # Auto-detect speaker name
             speaker = self.participants.get(user_id, "Unknown")
             
-            # If still unknown, check transcription data
-            if speaker == "Unknown":
-                if 'user_name' in message:
-                    speaker = message['user_name']
-                else:
-                    # Minimal logic: if "Unknown", just let the LLM handle it,
-                    # but we can try to check the user_id if it's not our agent.
-                    if user_id != 'local':
-                        speaker = "Unknown" # Keep as Unknown but send the text
-            
-            # Safely schedule the async task on the main event loop
             if text:
                 self.loop.call_soon_threadsafe(
                     lambda: asyncio.create_task(self.scribe.process_audio_transcript(speaker, text))
                 )
     
     def on_call_state_updated(self, state):
-        logger.info(f"📞 Call state updated: {state}")
+        logger.info(f"� Call state: {state}")
         if state == "joined":
-            logger.info("✅ Joined! Syncing participant list...")
             try:
                 all_participants = self.scribe.client.participants()
                 for p_id, p_info in all_participants.items():
                     u_name = p_info.get('info', {}).get('userName', 'Unknown')
                     if u_name != 'Unknown' and p_id != 'local':
                         self.participants[p_id] = u_name
-                logger.info(f"👥 Participants discovered: {list(self.participants.values())}")
             except Exception as e:
                 logger.error(f"Error syncing participants: {e}")
             
@@ -437,7 +462,6 @@ class DailyEventHandler(EventHandler):
 
     def _safe_start_transcription(self):
         try:
-            logger.info("🎙️ Starting transcription service...")
             self.scribe.client.start_transcription()
         except Exception as e:
             logger.error(f"❌ Error starting transcription: {e}")
@@ -445,21 +469,11 @@ class DailyEventHandler(EventHandler):
     def on_participant_joined(self, participant):
         user_id = participant.get('id')
         user_name = participant.get('info', {}).get('userName', 'Unknown')
-        logger.info(f"👥 Participant joined: {user_name} ({user_id})")
         if user_name != 'Unknown' and user_id != 'local':
             self.participants[user_id] = user_name
-    
-    def on_participant_updated(self, participant):
-        user_id = participant.get('id')
-        user_name = participant.get('info', {}).get('userName', 'Unknown')
-        if user_name != 'Unknown' and user_id != 'local':
-            self.participants[user_id] = user_name
-            logger.info(f"🔄 Participant updated: {user_name} ({user_id})")
     
     def on_participant_left(self, participant, reason):
         user_id = participant.get('id')
-        user_name = self.participants.get(user_id, 'Unknown')
-        logger.info(f"👋 Participant left: {user_name} ({user_id})")
         if user_id in self.participants:
             del self.participants[user_id]
     
@@ -467,63 +481,44 @@ class DailyEventHandler(EventHandler):
         logger.error(f"❌ Daily error: {error}")
 
 
-async def main(room_url: str, token: str, visit_id: str, patient_id: str, doctor_name: str, patient_name: str):
+async def main(room_url: str, token: str, visit_id: str, patient_id: str, 
+               doctor_name: str, patient_name: str):
     """Main entry point."""
     
-    logger.info("🏥 ClinXplain Medical Scribe Agent")
+    logger.info("🏥 ClinXplain Self-Evolving Medical Scribe Agent")
     logger.info(f"📍 Room: {room_url}")
     logger.info(f"🔑 Visit ID: {visit_id}")
-    logger.info(f"👤 Patient ID: {patient_id}")
-    logger.info(f"👨‍⚕️ Doctor: {doctor_name}")
-    logger.info(f"👤 Patient: {patient_name}")
+    
+    # Initialize W&B Weave
+    init_weave()
     
     backend_url = os.getenv("BACKEND_URL", "http://localhost:3001")
-    
-    # Get current loop
     loop = asyncio.get_running_loop()
     
-    # Initialize Daily
     Daily.init()
     
-    # Create scribe
     scribe = MedicalScribeAgent(backend_url, visit_id, patient_id, doctor_name, patient_name)
+    await scribe.initialize()  # Load evolution state
     
-    # Fetch patient context before starting
-    logger.info("📋 Fetching patient medical history...")
-    await scribe._fetch_patient_context()
-    
-    # Create Daily client with thread-safe handler
     client = CallClient(event_handler=DailyEventHandler(scribe, loop))
-    scribe.client = client # Give scribe access to client
+    scribe.client = client
     
     try:
-        # Join call
         logger.info("📞 Joining Daily call...")
         client.join(room_url, meeting_token=token, client_settings={
-            "inputs": {
-                "camera": False,
-                "microphone": {
-                    "isEnabled": False
-                }
-            },
-            "publishing": {
-                "microphone": False,
-                "camera": False
-            }
+            "inputs": {"camera": False, "microphone": {"isEnabled": False}},
+            "publishing": {"microphone": False, "camera": False}
         })
         
-        logger.info("✅ Join requested. Listening for transcription events...")
+        logger.info(f"✅ Agent ready (prompt v{scribe.evolution.prompt_version})")
         
-        # Keep running
         while True:
             await asyncio.sleep(1)
             
     except asyncio.CancelledError:
-        logger.info("⏹️ Agent task cancelled")
+        logger.info("⏹️ Agent cancelled")
     except KeyboardInterrupt:
-        logger.info("⏹️ Stopping agent...")
-    except Exception as e:
-        logger.error(f"❌ Error in agent loop: {e}", exc_info=True)
+        logger.info("⏹️ Stopping...")
     finally:
         try:
             client.leave()
@@ -539,10 +534,9 @@ if __name__ == "__main__":
         sys.exit(1)
     
     try:
-        # room_url, token, visit_id, patient_id, doctor_name, patient_name
         asyncio.run(main(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5], sys.argv[6]))
     except KeyboardInterrupt:
-        logger.info("⏹️ Stopped by user")
+        logger.info("⏹️ Stopped")
     except Exception as e:
-        logger.error(f"❌ Fatal error: {e}", exc_info=True)
+        logger.error(f"❌ Fatal: {e}", exc_info=True)
         sys.exit(1)

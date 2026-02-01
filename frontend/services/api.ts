@@ -73,7 +73,20 @@ export const patientsAPI = {
         return response.data;
     },
 
-    create: async (data: { name: string; dateOfBirth?: string; phone?: string; email?: string }) => {
+    create: async (data: {
+        fullName: string;
+        dateOfBirth?: string;
+        gender?: string;
+        contactInfo?: {
+            phone?: string;
+            email?: string;
+            address?: string;
+        };
+        insuranceInfo?: {
+            provider?: string;
+            memberId?: string;
+        };
+    }) => {
         const response = await api.post('/patients', data);
         return response.data;
     },
@@ -136,6 +149,43 @@ export const statsAPI = {
 
     getSidebar: async () => {
         const response = await api.get('/stats/sidebar');
+        return response.data;
+    }
+};
+
+// Visits API
+export const visitsAPI = {
+    getAll: async () => {
+        const response = await api.get('/visits');
+        return response.data;
+    },
+
+    getById: async (id: string) => {
+        const response = await api.get(`/visits/${id}`);
+        return response.data;
+    },
+
+    create: async (data: {
+        patientId: string;
+        visitDate?: string;
+        type?: string;
+        mode?: string;
+        location?: string;
+        chiefComplaint?: any;
+        symptoms?: any[];
+        vitals?: any;
+        medications?: any[];
+        allergies?: string[];
+        clinicalAssessment?: any;
+        planOfCare?: any;
+        insights?: any;
+    }) => {
+        const response = await api.post('/visits', data);
+        return response.data;
+    },
+
+    update: async (id: string, data: any) => {
+        const response = await api.put(`/visits/${id}`, data);
         return response.data;
     }
 };

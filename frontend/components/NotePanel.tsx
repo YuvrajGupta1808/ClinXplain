@@ -53,23 +53,36 @@ const NotePanel: React.FC<NotePanelProps> = ({ visitData, isLoading, onVisitChan
   }, [visitData]);
 
   const handleRegenerate = async () => {
-    // Need visitId to fetch current visit
+    // Need visitId to regenerate
     if (!visitData?.visitId) {
       console.warn('⚠️ No visitId available for regenerate');
+      alert('No visit available to regenerate');
       return;
     }
     
     setIsLoadingPatientData(true);
     try {
-      console.log(`🔄 Regenerating from current visit: ${visitData.visitId}`);
-      const { getVisitData } = await import('../services/scribeService');
-      const latestVisit = await getVisitData(visitData.visitId);
+      console.log(`🔄 Regenerating clinical note for visit: ${visitData.visitId}`);
+      const response = await fetch(`http://localhost:3001/api/scribe/visit/${visitData.visitId}/regenerate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
       
-      console.log('✅ Received latest visit data:', latestVisit);
-      setEditableVisit(latestVisit);
-      setSoapRepresentation(mapVisitToSoap(latestVisit));
+      if (response.ok) {
+        const regeneratedVisit = await response.json();
+        console.log('✅ Clinical note regenerated successfully');
+        setEditableVisit(regeneratedVisit);
+        setSoapRepresentation(mapVisitToSoap(regeneratedVisit));
+        onVisitChange?.(regeneratedVisit);
+        alert('✅ Clinical note regenerated successfully!');
+      } else {
+        const error = await response.text();
+        console.error('❌ Failed to regenerate:', error);
+        alert('Failed to regenerate: ' + error);
+      }
     } catch (error) {
       console.error('❌ Failed to regenerate:', error);
+      alert('Failed to regenerate: ' + (error as Error).message);
     }
     setIsLoadingPatientData(false);
   };

@@ -148,6 +148,16 @@ export class Visit {
         return visits.filter(v => v !== null);
     }
     
+    static async getByDoctor(doctorId, limit = 100) {
+        const visitIds = await client.zRange(`doctor:${doctorId}:visits_history`, 0, limit - 1, { REV: true });
+        
+        const visits = await Promise.all(
+            visitIds.map(id => this.findById(id))
+        );
+        
+        return visits.filter(v => v !== null);
+    }
+    
     // Add specific method to append transcript segments efficiently
     static async appendTranscript(visitId, segment) {
         const visit = await this.findById(visitId);

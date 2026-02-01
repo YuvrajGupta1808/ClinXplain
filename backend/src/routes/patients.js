@@ -82,9 +82,9 @@ router.get('/:id', authenticateToken, async (req, res) => {
 // Create new patient
 router.post('/', authenticateToken, async (req, res) => {
     try {
-        const { name, dateOfBirth, phone, email } = req.body;
+        const { fullName, dateOfBirth, gender, contactInfo, insuranceInfo } = req.body;
 
-        if (!name) {
+        if (!fullName) {
             return res.status(400).json({
                 success: false,
                 error: 'Patient name is required'
@@ -93,10 +93,11 @@ router.post('/', authenticateToken, async (req, res) => {
 
         const patient = await Patient.create({
             doctorId: req.user.doctorId,
-            name,
+            fullName,
             dateOfBirth,
-            phone,
-            email
+            gender,
+            contactInfo,
+            insuranceInfo
         });
 
         res.status(201).json({
