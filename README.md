@@ -12,12 +12,11 @@
 - 3 patients pre-loaded: David Martinez, Sarah Williams, Robert Chen
 - 2 appointments with full clinical data
 
-### 3. Improved Pipecat Agent - Simplified & Working
-- **Removed Pipecat** - had Python 3.14 compatibility issues with numba dependency
-- **New simplified agent** using Daily SDK + Gemini directly
-- **Better error handling** and logging
-- **Real-time clinical data extraction** from conversations
-- **Automatic updates** to backend every 30 seconds or after 5 messages
+### 3. Deepgram Transcription & Modular Agent
+- **Deepgram Nova-2 Medical**: Replaced Daily's internal transcription with a direct high-accuracy medical STT stream.
+- **Modular Design**: Refactored the agent into `main.py`, `agent_logic.py`, and `event_handler.py` (Rule 1: <300 lines).
+- **Pause-Based Segmenting**: Transcripts are segmented into clean bubbles only after a 2.5s pause.
+- **Improved extraction**: Gemini 2.0 Flash handles the structured clinical data from Deepgram's text.
 
 ## 🚀 How to Run Everything
 
