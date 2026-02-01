@@ -1,0 +1,33 @@
+# RedisVL index schema for RAG documents
+# https://redis.io/docs/latest/develop/ai/redisvl/
+version: "0.1.0"
+
+index:
+  name: rag_docs
+  prefix: rag_docs
+
+fields:
+  # Chunk text (searchable)
+  - name: content
+    type: text
+
+  # Source identifier (e.g. file path)
+  - name: source
+    type: tag
+
+  # Chunk index within document (for ordering)
+  - name: chunk_index
+    type: numeric
+
+  # Optional metadata as tag for filtering
+  - name: metadata
+    type: tag
+
+  # Vector embedding (cosine similarity for semantic search)
+  - name: content_embedding
+    type: vector
+    attrs:
+      algorithm: hnsw
+      datatype: float32
+      dims: 1536
+      distance_metric: cosine
