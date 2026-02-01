@@ -110,8 +110,75 @@ router.post('/session', async (req, res) => {
 
         const visit = await Visit.create({ doctorId, patientId, type: 'Follow-up', mode: 'In-person', location: 'Center' });
 
-        let roomUrl = `https://clinxplain-demo.daily.co/visit-${visit.visitId}`;
-        let token = 'mock-token';
+        let roomUrl = '';
+        let token = '';
+
+        const dailyApiKey = process.env.DAILY_API_KEY;
+
+        if (dailyApiKey) {
+            try {
+                // 1. Create Daily Room
+                const roomResp = await fetch('https://api.daily.co/v1/rooms', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${dailyApiKey}`
+                    },
+                    body: JSON.stringify({
+                        name: `visit-${visit.visitId}`,
+                        properties: {
+                            enable_chat: true,
+                            enable_screenshare: true,
+                            exp: Math.round(Date.now() / 1000) + 3600 // 1 hour expiration
+                        }
+                    })
+                });
+
+                if (roomResp.ok) {
+                    const roomData = await roomResp.json();
+                    roomUrl = roomData.url;
+                } else {
+                    const errorText = await roomResp.text();
+                    console.error('Daily API Create Room Error:', errorText);
+                    // If room already exists, try to get it? Or just construct URL?
+                    // Usually safe to construct if we know the domain, but getting it is safer.
+                    // Fallback to construction if creation fails (maybe it exists?)
+                    // But we don't know the domain without fetching.
+                }
+
+                // 2. Create Meeting Token
+                if (roomUrl) {
+                    const tokenResp = await fetch('https://api.daily.co/v1/meeting-tokens', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${dailyApiKey}`
+                        },
+                        body: JSON.stringify({
+                            properties: {
+                                room_name: `visit-${visit.visitId}`,
+                                user_name: doctorName,
+                                is_owner: true
+                            }
+                        })
+                    });
+                    
+                    if (tokenResp.ok) {
+                        const tokenData = await tokenResp.json();
+                        token = tokenData.token;
+                    } 
+                }
+            } catch (error) {
+                console.error('Failed to create Daily session:', error);
+            }
+        }
+
+        // Fallback or if created successfully
+        if (!roomUrl) {
+           console.warn('⚠️ Using fallback mock URL for Daily');
+           roomUrl = `https://clinxplain-demo.daily.co/visit-${visit.visitId}`;
+           token = 'mock-token'; 
+        }
 
         res.json({ visitId: visit.visitId, roomUrl, token });
 
