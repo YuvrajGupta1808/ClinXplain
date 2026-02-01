@@ -2,6 +2,7 @@ import { LayoutGrid } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 import AssistantScreen from './components/AssistantScreen';
 import CoverPage from './components/CoverPage';
+import PatientsScreen from './components/PatientsScreen';
 import Sidebar from './components/Sidebar';
 import SignInPage from './components/SignInPage';
 import VisitScreen from './components/VisitScreen';
@@ -30,8 +31,10 @@ const AppContent: React.FC = () => {
   const loadPatients = async () => {
       try {
           // Fetch patients from backend seeded data
-          const data = await patientsAPI.getRecent(10);
-          setPatients(data);
+          const result = await patientsAPI.getRecent(10);
+          if (result.success) {
+            setPatients(result.data);
+          }
       } catch (error) {
           console.error('Failed to load patients', error);
       }
@@ -134,7 +137,11 @@ const AppContent: React.FC = () => {
           />
         )}
 
-        {!['cover', 'welcome', 'visits', 'assistant'].includes(currentView) && (
+        {currentView === 'patients' && (
+          <PatientsScreen />
+        )}
+
+        {!['cover', 'welcome', 'visits', 'assistant', 'patients'].includes(currentView) && (
           <div className="flex-1 flex items-center justify-center bg-white m-4 rounded-3xl shadow-sm border border-blue-100 animate-fadeIn">
             <div className="text-center">
               <div className="w-20 h-20 bg-blue-50 text-blue-600 rounded-3xl flex items-center justify-center mx-auto mb-6">
