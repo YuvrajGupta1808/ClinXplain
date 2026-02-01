@@ -15,12 +15,15 @@ dependencies = [
     "pypdf>=5.0.0",
     "python-dotenv>=1.0.0",
     "numpy>=1.26.0",
-    # RAG API
-    "fastapi>=0.115.0",
-    "uvicorn[standard]>=0.32.0",
     # Agent / notebook
     "pydantic>=2.0.0",
     "weave>=0.0.1",
     "wandb>=0.18.0",
     "matplotlib>=3.8.0",
+    "ipykernel>=7.1.0",
+]
+
+[project.optional-dependencies]
+ragas = [
+    "ragas>=0.2.0",
 ]

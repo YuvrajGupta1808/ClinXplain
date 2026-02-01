@@ -34,6 +34,10 @@ def main() -> int:
     retrieve_parser.add_argument("--top-k", type=int, default=None)
     retrieve_parser.add_argument("--no-print", action="store_true", help="Do not print chunk text")
 
+    eval_parser = sub.add_parser("eval", help="Run RAG evaluation with W&B Weave (tracing + LLM judge)")
+    eval_parser.add_argument("--project", type=str, default=None, help="Weave project (e.g. your-username/rag-eval). Default: WEAVE_PROJECT env or your W&B entity")
+    eval_parser.add_argument("--parallelism", type=int, default=None, help="Max parallel eval workers (e.g. 3 to avoid rate limits)")
+
     args = parser.parse_args()
     config = RAGConfig.from_env()
     pipeline = RAGPipeline(config)
@@ -61,6 +65,23 @@ def main() -> int:
             for i, d in enumerate(docs):
                 print(f"\n--- Chunk {i + 1} (source: {d.metadata.get('source', '')}) ---")
                 print(d.page_content[:500] + ("..." if len(d.page_content) > 500 else ""))
+        return 0
+
+    if args.command == "eval":
+        try:
+            from RAG.weave_eval import run_evaluation
+        except ImportError as e:
+            print("Weave evaluation requires weave and wandb.", file=sys.stderr)
+            print("Install with: uv add weave wandb", file=sys.stderr)
+            raise SystemExit(1) from e
+        if run_evaluation is None:
+            print("Weave is not installed. Install with: uv add weave wandb", file=sys.stderr)
+            return 1
+        run_evaluation(
+            project=args.project,
+            parallelism=args.parallelism,
+        )
+        print("Evaluation complete. Check your W&B Weave project for traces and scores.")
         return 0
 
     return 0

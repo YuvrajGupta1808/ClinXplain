@@ -1,14 +1,55 @@
 # Python-generated files
 __pycache__/
 *.py[oc]
+*.pyo
 build/
 dist/
 wheels/
 *.egg-info
+*.egg
+.eggs/
+.Python
 
 # Virtual environments
 .venv
+venv/
+.envrc
 
-# Environment and secrets
+# Environment and secrets (never commit)
 .env
 .env.local
+.env.*.local
+*.pem
+*.key
+secrets/
+
+# IDE / editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing / coverage
+.coverage
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.tox/
+
+# Jupyter / Marimo (session and checkpoints)
+.ipynb_checkpoints/
+notebook/__marimo__/
+
+# Logs and temp
+*.log
+logs/
+tmp/
+temp/
+
+# Weights & Biases (local runs)
+wandb/
