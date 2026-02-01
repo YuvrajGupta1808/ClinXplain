@@ -231,4 +231,22 @@ router.post('/visit/:visitId/regenerate', async (req, res) => {
     } catch (error) { res.status(500).json({ error: 'Failed to regenerate' }); }
 });
 
+router.post('/visit/:visitId/transcript', async (req, res) => {
+    try {
+        const { visitId } = req.params;
+        const { speaker, text } = req.body;
+        
+        const timestamp = Date.now();
+        const segment = { speaker, text, timestamp };
+        
+        const updatedVisit = await Visit.appendTranscript(visitId, segment);
+        if (!updatedVisit) return res.status(404).json({ error: 'Visit not found' });
+        
+        res.json({ success: true, segment });
+    } catch (error) {
+        console.error('Failed to save transcript:', error);
+        res.status(500).json({ error: 'Failed to save transcript' });
+    }
+});
+
 export default router;
