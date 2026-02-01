@@ -131,18 +131,17 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
         </div>
         
         {[
-          { id: 'Assistant', icon: <Sparkles size={20} strokeWidth={2} />, label: 'AI Assistant', badge: 0 },
-          { id: 'Visits', icon: <LayoutDashboard size={20} strokeWidth={2} />, label: 'Dashboard', badge: 0 },
-          { id: 'Patients', icon: <Users size={20} strokeWidth={2} />, label: 'Patients', badge: 127 },
-          { id: 'Scribe', icon: <FileText size={20} strokeWidth={2} />, label: 'AI Scribe', badge: 0 },
-          { id: 'Calendar', icon: <Calendar size={20} strokeWidth={2} />, label: 'Appointments', badge: 5 },
-          { id: 'Nurse', icon: <Activity size={20} strokeWidth={2} />, label: 'Clinical Notes', badge: 0 },
+          { id: 'Assistant', icon: <Sparkles size={20} strokeWidth={2} />, label: 'AI Assistant' },
+          { id: 'Visits', icon: <LayoutDashboard size={20} strokeWidth={2} />, label: 'Dashboard' },
+          { id: 'Patients', icon: <Users size={20} strokeWidth={2} />, label: 'Patients' },
+          { id: 'Scribe', icon: <FileText size={20} strokeWidth={2} />, label: 'AI Scribe' },
+          { id: 'Calendar', icon: <Calendar size={20} strokeWidth={2} />, label: 'Appointments' },
+          { id: 'Nurse', icon: <Activity size={20} strokeWidth={2} />, label: 'Clinical Notes' },
         ].map((item) => (
           <MenuItem 
             key={item.id}
             icon={item.icon} 
-            label={item.label} 
-            badge={item.badge}
+            label={item.label}
             active={activeTab === item.id}
             onClick={() => onTabChange(item.id)}
           />
@@ -153,14 +152,13 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
         </div>
         
         {[
-          { id: 'Researcher', icon: <Search size={20} strokeWidth={2} />, label: 'Research', badge: 0 },
-          { id: 'Interpreter', icon: <Phone size={20} strokeWidth={2} />, label: 'Interpreter', badge: 0 },
+          { id: 'Researcher', icon: <Search size={20} strokeWidth={2} />, label: 'Research' },
+          { id: 'Interpreter', icon: <Phone size={20} strokeWidth={2} />, label: 'Interpreter' },
         ].map((item) => (
           <MenuItem 
             key={item.id}
             icon={item.icon} 
             label={item.label}
-            badge={item.badge}
             active={activeTab === item.id}
             onClick={() => onTabChange(item.id)}
           />
@@ -174,7 +172,6 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
         <button className="flex items-center gap-3 w-full px-4 py-2.5 rounded-lg text-slate-600 hover:bg-slate-100 transition-all">
           <Bell size={18} strokeWidth={2} />
           <span className="text-sm font-semibold">Notifications</span>
-          <span className="ml-auto text-xs font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700">3</span>
         </button>
         <button className="flex items-center gap-3 w-full px-4 py-2.5 rounded-lg text-slate-600 hover:bg-slate-100 transition-all">
           <HelpCircle size={18} strokeWidth={2} />
