@@ -4,6 +4,7 @@ import AppointmentsScreen from './components/AppointmentsScreen';
 import AssistantScreen from './components/AssistantScreen';
 import CoverPage from './components/CoverPage';
 import PatientsScreen from './components/PatientsScreen';
+import ResearcherScreen from './components/ResearcherScreen';
 import Sidebar from './components/Sidebar';
 import SignInPage from './components/SignInPage';
 import VisitScreen from './components/VisitScreen';

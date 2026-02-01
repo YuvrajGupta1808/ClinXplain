@@ -1,13 +1,14 @@
 const express = require('express');
 const cors = require('cors');
 const { Stagehand } = require('@browserbasehq/stagehand');
+const { z } = require('zod');
 require('dotenv').config();
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-const PORT = process.env.PORT || 3002;
+const PORT = process.env.PORT || 3170;
 
 // Store active sessions
 const activeSessions = new Map();
@@ -19,12 +20,10 @@ async function createStagehandSession() {
     apiKey: process.env.BROWSERBASE_API_KEY,
     projectId: process.env.BROWSERBASE_PROJECT_ID,
     browserbaseSessionCreateParams: {
-      proxies: true,
-      region: "us-west-2",
+      proxies: false, // Disable proxies to avoid tunnel connection issues
       browserSettings: {
         viewport: { width: 1920, height: 1080 },
         blockAds: true,
-        solveCaptchas: true,
       },
     },
   });
@@ -53,19 +52,25 @@ app.post('/api/research/extract', async (req, res) => {
     }
 
     // Navigate to URL
-    await stagehand.page.goto(url, { waitUntil: 'networkidle' });
+    await stagehand.page.goto(url, { 
+      waitUntil: 'domcontentloaded',
+      timeout: 30000 
+    });
 
-    // Extract data based on query
-    const extractedData = await stagehand.extract({
+    // Wait a bit for page to stabilize
+    await stagehand.page.waitForTimeout(2000);
+
+    // Extract data based on query using page.extract() with Zod schema
+    const extractedData = await stagehand.page.extract({
       instruction: query || "Extract all relevant medical research information, including key findings, methodologies, and conclusions",
-      schema: {
-        title: "string",
-        content: "string",
-        keyFindings: "array",
-        methodology: "string",
-        conclusions: "string",
-        citations: "array"
-      }
+      schema: z.object({
+        title: z.string().describe("The title of the research paper or article"),
+        content: z.string().describe("A summary of the main content"),
+        keyFindings: z.array(z.string()).describe("List of key findings from the research"),
+        methodology: z.string().describe("The research methodology used"),
+        conclusions: z.string().describe("The conclusions drawn from the research"),
+        citations: z.array(z.string()).describe("List of citations or references")
+      })
     });
 
     res.json({
@@ -102,7 +107,7 @@ app.post('/api/research/action', async (req, res) => {
     }
 
     // Perform the action
-    await stagehand.act({ action });
+    await stagehand.page.act({ action });
 
     res.json({
       success: true,
@@ -132,7 +137,7 @@ app.post('/api/research/observe', async (req, res) => {
       return res.status(400).json({ error: 'Invalid or expired session' });
     }
 
-    const observation = await stagehand.observe({
+    const observation = await stagehand.page.observe({
       instruction: instruction || "Observe the current page state"
     });
 

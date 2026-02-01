@@ -46,7 +46,7 @@ const ResearcherScreen: React.FC = () => {
     });
 
     try {
-      const response = await fetch('http://localhost:3002/api/research/extract', {
+      const response = await fetch('http://localhost:3170/api/research/extract', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -77,7 +77,7 @@ const ResearcherScreen: React.FC = () => {
       setCurrentSession(prev => prev ? {
         ...prev,
         status: 'error',
-        error: 'Network error. Make sure the research server is running on port 3002.'
+        error: 'Network error. Make sure the research server is running on port 3170.'
       } : null);
     }
   };

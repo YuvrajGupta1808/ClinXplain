@@ -33,7 +33,7 @@ Or use the convenience script:
 ./start.sh
 ```
 
-The server will run on `http://localhost:3002`
+The server will run on `http://localhost:3170`
 
 ### 4. Start the Frontend
 
@@ -50,7 +50,7 @@ Then navigate to the "Research" tab in the application.
 ### Extract Research Data
 
 ```bash
-curl -X POST http://localhost:3002/api/research/extract \
+curl -X POST http://localhost:3170/api/research/extract \
   -H "Content-Type: application/json" \
   -d '{
     "url": "https://pubmed.ncbi.nlm.nih.gov/example",
@@ -61,7 +61,7 @@ curl -X POST http://localhost:3002/api/research/extract \
 ### Health Check
 
 ```bash
-curl http://localhost:3002/health
+curl http://localhost:3170/health
 ```
 
 Expected response:
@@ -162,7 +162,7 @@ Close an active session.
 ## Troubleshooting
 
 ### Server won't start
-- Check that port 3002 is not in use
+- Check that port 3170 is not in use
 - Verify your `.env` file has the correct credentials
 - Run `npm install` to ensure dependencies are installed
 
