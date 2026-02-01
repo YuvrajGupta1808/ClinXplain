@@ -83,6 +83,12 @@ export class Visit {
                 uncertaintyFlags: []
             },
             
+            insights: {
+                recommendedQuestions: [], // Array of strings - questions to ask based on conversation gaps
+                differentialDiagnoses: [], // Array of { diagnosis: string, confidence: string, reasoning: string }
+                nextSteps: [] // Array of strings - recommended protocols/actions
+            },
+            
             reports: [], // Array of { id, name, url, type, uploadedAt, size }
             
             transcript: [], // Array of { speaker, text, timestamp }

@@ -12,8 +12,14 @@ export class Stats {
         const todayAppointments = await Appointment.findByDate(doctorId, today);
         const appointmentCount = todayAppointments.length;
 
-        // Get pending clinical notes count (placeholder for now)
-        const pendingNotes = 3; // TODO: Implement actual pending notes logic
+        // Get pending clinical notes count (visits in-progress)
+        const visitIds = await client.zRange(`doctor:${doctorId}:visits_history`, 0, -1);
+        const visits = await Promise.all(visitIds.map(id => client.hGet(`visit:${id}`, 'data')));
+        const pendingNotes = visits.filter(v => {
+            if (!v) return false;
+            const data = JSON.parse(v);
+            return data.status === 'in-progress';
+        }).length;
 
         // Get satisfaction score (placeholder - would come from patient feedback)
         const satisfaction = 96;

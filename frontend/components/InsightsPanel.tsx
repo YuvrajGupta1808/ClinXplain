@@ -1,4 +1,4 @@
-import { ArrowRight, BookOpen, ClipboardList, History, Stethoscope } from 'lucide-react';
+import { BookOpen, ClipboardList, History, Stethoscope } from 'lucide-react';
 import React from 'react';
 import { AiSuggestion, Patient, PatientHistory } from '../types';
 
@@ -7,15 +7,35 @@ interface InsightsPanelProps {
   isRecording: boolean;
   patient?: Patient;
   patientHistory?: PatientHistory;
+  visit?: any; // Visit data containing AI-generated insights
+  initialInsights?: any; // Historical insights from previous visits
 }
 
 const InsightsPanel: React.FC<InsightsPanelProps> = ({ 
   suggestions, 
   isRecording,
-  patientHistory 
+  patientHistory,
+  visit,
+  initialInsights
 }) => {
   const questions = suggestions.filter(s => s.type === 'question');
   const diagnoses = suggestions.filter(s => s.type === 'diagnosis');
+  
+  // Extract AI-generated insights from visit data (live recording insights)
+  const liveInsights = visit?.insights;
+  
+  // Use live insights if recording is active and available, otherwise fall back to initial insights
+  const aiQuestions = (isRecording && liveInsights?.recommendedQuestions?.length > 0) 
+    ? liveInsights.recommendedQuestions 
+    : (initialInsights?.recommendedQuestions || []);
+  
+  const aiDiagnoses = (isRecording && liveInsights?.differentialDiagnoses?.length > 0)
+    ? liveInsights.differentialDiagnoses
+    : (initialInsights?.differentialDiagnoses || []);
+  
+  const aiNextSteps = (isRecording && liveInsights?.nextSteps?.length > 0)
+    ? liveInsights.nextSteps
+    : (initialInsights?.nextSteps || []);
 
   return (
     <div className="w-1/2 p-6 overflow-y-auto border-r border-slate-200 bg-slate-50/50">
@@ -26,15 +46,20 @@ const InsightsPanel: React.FC<InsightsPanelProps> = ({
           <h3 className="text-[10px] font-bold uppercase tracking-[0.2em]">Recommended Questions</h3>
         </div>
         <div className="space-y-3">
-          {questions.length === 0 && isRecording && (
+          {aiQuestions.length === 0 && isRecording && (
             <div className="text-sm text-slate-400 italic font-medium flex items-center gap-2 px-4 py-3 bg-white/50 rounded-xl border border-dashed border-slate-300">
               <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
               Analyzing conversation for clinical gaps...
             </div>
           )}
-          {questions.map(s => (
-            <div key={s.id} className="bg-white p-4 rounded-xl border border-blue-100 shadow-sm text-sm text-slate-700 leading-relaxed animate-fadeIn border-l-4 border-l-blue-500">
-              {s.content}
+          {aiQuestions.length === 0 && !isRecording && (
+            <div className="text-sm text-slate-400 italic font-medium px-4 py-3 bg-white/50 rounded-xl border border-dashed border-slate-200">
+              No recommended questions yet. Start recording to generate insights.
+            </div>
+          )}
+          {aiQuestions.map((question, idx) => (
+            <div key={idx} className="bg-white p-4 rounded-xl border border-blue-100 shadow-sm text-sm text-slate-700 leading-relaxed animate-fadeIn border-l-4 border-l-blue-500">
+              {question}
             </div>
           ))}
         </div>
@@ -162,10 +187,28 @@ const InsightsPanel: React.FC<InsightsPanelProps> = ({
           <h3 className="text-[10px] font-bold uppercase tracking-[0.2em]">Insights & Differentials</h3>
         </div>
         <div className="space-y-3">
-          {diagnoses.map(s => (
-            <div key={s.id} className="bg-blue-600 p-4 rounded-xl text-sm font-bold text-white flex items-center justify-between shadow-lg shadow-blue-200 animate-fadeIn cursor-pointer hover:bg-blue-700 transition-all">
-              {s.content}
-              <ArrowRight size={16} className="text-white/80" />
+          {aiDiagnoses.length === 0 && isRecording && (
+            <div className="text-sm text-slate-400 italic font-medium flex items-center gap-2 px-4 py-3 bg-white/50 rounded-xl border border-dashed border-slate-300">
+              <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
+              Analyzing symptoms for differential diagnoses...
+            </div>
+          )}
+          {aiDiagnoses.length === 0 && !isRecording && (
+            <div className="text-sm text-slate-400 italic font-medium px-4 py-3 bg-white/50 rounded-xl border border-dashed border-slate-200">
+              No differential diagnoses yet.
+            </div>
+          )}
+          {aiDiagnoses.map((diag, idx) => (
+            <div key={idx} className="bg-white rounded-xl border border-blue-200 shadow-sm overflow-hidden animate-fadeIn">
+              <div className="bg-gradient-to-r from-blue-600 to-blue-700 p-4 text-sm font-bold text-white flex items-center justify-between cursor-pointer hover:from-blue-700 hover:to-blue-800 transition-all">
+                <span>{diag.diagnosis}</span>
+                <span className="text-xs bg-white/20 px-2 py-1 rounded-lg">{diag.confidence}</span>
+              </div>
+              {diag.reasoning && (
+                <div className="p-3 text-xs text-slate-600 bg-blue-50/50 border-t border-blue-100">
+                  <span className="font-semibold text-blue-700">Clinical reasoning:</span> {diag.reasoning}
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -178,15 +221,29 @@ const InsightsPanel: React.FC<InsightsPanelProps> = ({
           <h3 className="text-[10px] font-bold uppercase tracking-[0.2em]">Next Steps (Protocols)</h3>
         </div>
         <div className="flex flex-wrap gap-2">
-          <div className="bg-blue-50 text-blue-700 px-4 py-2 rounded-xl text-xs font-bold border border-blue-200 shadow-sm hover:shadow-md transition-all cursor-pointer">
-            Screen for depression (PHQ-9)
-          </div>
-          <div className="bg-white text-slate-600 px-4 py-2 rounded-xl text-xs font-bold border border-slate-200 shadow-sm hover:shadow-md transition-all cursor-pointer">
-            Suicide risk assessment
-          </div>
-          <div className="bg-white text-slate-600 px-4 py-2 rounded-xl text-xs font-bold border border-slate-200 shadow-sm hover:shadow-md transition-all cursor-pointer">
-            Mental health referral
-          </div>
+          {aiNextSteps.length === 0 && isRecording && (
+            <div className="w-full text-sm text-slate-400 italic font-medium flex items-center gap-2 px-4 py-3 bg-white/50 rounded-xl border border-dashed border-slate-300">
+              <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
+              Generating recommended protocols...
+            </div>
+          )}
+          {aiNextSteps.length === 0 && !isRecording && (
+            <div className="w-full text-sm text-slate-400 italic font-medium px-4 py-3 bg-white/50 rounded-xl border border-dashed border-slate-200">
+              No next steps recommended yet.
+            </div>
+          )}
+          {aiNextSteps.map((step, idx) => (
+            <div 
+              key={idx}
+              className={`px-4 py-2 rounded-xl text-xs font-bold border shadow-sm hover:shadow-md transition-all cursor-pointer animate-fadeIn ${
+                idx === 0 
+                  ? 'bg-blue-50 text-blue-700 border-blue-200' 
+                  : 'bg-white text-slate-600 border-slate-200 hover:border-blue-200'
+              }`}
+            >
+              {step}
+            </div>
+          ))}
         </div>
       </div>
     </div>

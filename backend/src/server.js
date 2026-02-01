@@ -22,6 +22,7 @@ app.use(cors({
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use('/uploads', express.static('uploads'));
 
 // Request logging middleware
 app.use((req, res, next) => {
@@ -56,6 +57,14 @@ app.use((req, res) => {
 // Error handler
 app.use((err, req, res, next) => {
     console.error('Server error:', err);
+    
+    if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(413).json({
+            success: false,
+            error: 'File too large. Maximum size is 50MB.'
+        });
+    }
+
     res.status(500).json({
         success: false,
         error: 'Internal server error'

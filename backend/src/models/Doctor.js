@@ -3,8 +3,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { client } from '../config/redis.js';
 
 export class Doctor {
-    static async create({ email, password, name, specialty }) {
-        const doctorId = uuidv4();
+    static async create({ email, password, name, specialty, id }) {
+        const doctorId = id || uuidv4();
         const hashedPassword = await bcrypt.hash(password, 10);
         
         const doctorData = {

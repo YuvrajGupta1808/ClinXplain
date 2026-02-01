@@ -35,3 +35,14 @@ export const getPatientVisits = async (patientId: string) => {
     const response = await axios.get(`${API_URL}/scribe/patient/${patientId}/visits`);
     return response.data;
 };
+
+export const searchPatient = async (patientName: string) => {
+    const response = await axios.get(`${API_URL}/scribe/search-patient/${encodeURIComponent(patientName)}`);
+    return response.data;
+};
+
+// Get current visit data (being updated by AI agent in real-time)
+export const getVisitData = async (visitId: string) => {
+    const response = await axios.get(`${API_URL}/scribe/visit/${visitId}`);
+    return response.data;
+};

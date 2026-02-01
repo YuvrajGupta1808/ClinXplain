@@ -77,16 +77,25 @@ export interface PlanOfCare {
 
 export interface VisitData {
   visitId: string;
+  patientId?: string;
+  doctorId?: string;
+  visitDate?: string;
+  visitType?: string;
+  visitMode?: string;
+  location?: string;
   metadata: any;
   chiefComplaint: ChiefComplaint;
   symptoms: Symptom[];
   vitals: Vitals;
   medications: Medication[];
+  allergies: string[];
   clinicalAssessment: ClinicalAssessment;
   planOfCare: PlanOfCare;
   transcript: TranscriptEntry[];
   status: 'scheduled' | 'in-progress' | 'completed' | 'signed';
   reports: Attachment[];
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface SoapNote {
@@ -110,7 +119,8 @@ export interface Attachment {
   type: string;
   size: number;
   url: string;
-  uploadedAt: number;
+  uploadedAt: number | string;
+  extraction?: string;
 }
 
 export interface PatientHistory {

@@ -17,9 +17,11 @@ async function seedData() {
 
         console.log('\n🌱 Starting enhanced data seeding...\n');
 
-        // Create Doctor
-        console.log('Creating Dr. Marcus Thorne...');
+        // Create Doctor with Stable ID
+        console.log('Creating Dr. Marcus Thorne (Stable ID)...');
+        const doctorId = 'd03e839e-1234-5678-90ab-cdef12345678';
         const doctor = await Doctor.create({
+            id: doctorId,
             email: 'doctor@clinxplain.com',
             password: 'demo123',
             name: 'Dr. Marcus Thorne',
@@ -30,27 +32,16 @@ async function seedData() {
         console.log('\nCreating Patients with detailed profiles...');
         
         const patientProfiles = [
-            {
-                fullName: 'David Martinez',
-                dateOfBirth: '1978-11-30',
-                gender: 'Male',
-                contactInfo: { phone: '(555) 345-6789', email: 'david.m@email.com', address: '123 Oak St, Springfield' },
-                insuranceInfo: { provider: 'BlueCross', memberId: 'BC-123456789' }
-            },
-            {
-                fullName: 'Sarah Williams',
-                dateOfBirth: '1988-12-25',
-                gender: 'Female',
-                contactInfo: { phone: '(555) 678-9012', email: 'sarah.w@email.com', address: '456 Maple Ave, Springfield' },
-                insuranceInfo: { provider: 'Aetna', memberId: 'AE-987654321' }
-            },
-            {
-                fullName: 'Robert Chen',
-                dateOfBirth: '1985-03-15',
-                gender: 'Male',
-                contactInfo: { phone: '(555) 123-4567', email: 'robert.c@email.com', address: '789 Pine Ln, Springfield' },
-                insuranceInfo: { provider: 'UnitedHealth', memberId: 'UH-456789123' }
-            }
+            { fullName: 'David Martinez', dateOfBirth: '1978-11-30', gender: 'Male', contactInfo: { phone: '(555) 345-6789', email: 'david.m@email.com', address: '123 Oak St, Springfield' }, insuranceInfo: { provider: 'BlueCross', memberId: 'BC-123456789' } },
+            { fullName: 'Sarah Williams', dateOfBirth: '1988-12-25', gender: 'Female', contactInfo: { phone: '(555) 678-9012', email: 'sarah.w@email.com', address: '456 Maple Ave, Springfield' }, insuranceInfo: { provider: 'Aetna', memberId: 'AE-987654321' } },
+            { fullName: 'Robert Chen', dateOfBirth: '1985-03-15', gender: 'Male', contactInfo: { phone: '(555) 123-4567', email: 'robert.c@email.com', address: '789 Pine Ln, Springfield' }, insuranceInfo: { provider: 'UnitedHealth', memberId: 'UH-456789123' } },
+            { fullName: 'Elena Rodriguez', dateOfBirth: '1992-06-12', gender: 'Female', contactInfo: { phone: '(555) 234-5678', email: 'elena.r@email.com', address: '321 Elm St, Springfield' }, insuranceInfo: { provider: 'Cigna', memberId: 'CG-555666' } },
+            { fullName: 'James Wilson', dateOfBirth: '1965-09-20', gender: 'Male', contactInfo: { phone: '(555) 876-5432', email: 'j.wilson@email.com', address: '555 Cedar Rd, Springfield' }, insuranceInfo: { provider: 'Medicare', memberId: 'MC-777888' } },
+            { fullName: 'Linda Thompson', dateOfBirth: '1972-04-05', gender: 'Female', contactInfo: { phone: '(555) 444-3333', email: 'linda.t@email.com', address: '999 Birch Wy, Springfield' }, insuranceInfo: { provider: 'Humana', memberId: 'HM-111222' } },
+            { fullName: 'Michael Brown', dateOfBirth: '1980-01-10', gender: 'Male', contactInfo: { phone: '(555) 555-5555', email: 'm.brown@email.com', address: '101 Ash Blvd, Springfield' }, insuranceInfo: { provider: 'BlueShield', memberId: 'BS-999000' } },
+            { fullName: 'Sophia Lee', dateOfBirth: '1995-11-25', gender: 'Female', contactInfo: { phone: '(555) 999-8888', email: 'sophia.lee@email.com', address: '202 Willow Dr, Springfield' }, insuranceInfo: { provider: 'Kaiser', memberId: 'KP-333444' } },
+            { fullName: 'William Davis', dateOfBirth: '1958-07-30', gender: 'Male', contactInfo: { phone: '(555) 666-7777', email: 'w.davis@email.com', address: '303 Cherry Ct, Springfield' }, insuranceInfo: { provider: 'BlueCross', memberId: 'BC-555444' } },
+            { fullName: 'Emily Miller', dateOfBirth: '1990-02-14', gender: 'Female', contactInfo: { phone: '(555) 222-1111', email: 'emily.m@email.com', address: '404 Walnut St, Springfield' }, insuranceInfo: { provider: 'Aetna', memberId: 'AE-888999' } }
         ];
 
         const createdPatients = [];
@@ -108,10 +99,11 @@ async function seedData() {
                 {
                     id: 'rep-1',
                     name: 'Last_Lab_Results.pdf',
-                    url: 'https://example.com/reports/david_m_labs.pdf',
+                    url: 'http://localhost:3001/reports/david_m_labs.pdf',
                     type: 'application/pdf',
                     uploadedAt: new Date().toISOString(),
-                    size: 1024 * 542
+                    size: 1024 * 542,
+                    extraction: 'Patient shows elevated systolic BP (145 mmHg). Lipid panel within normal limits. Recommend titration of ACE inhibitor.'
                 }
             ],
             status: 'completed',
@@ -167,25 +159,20 @@ async function seedData() {
         console.log('\nCreating Today\'s Appointments...');
         const today = new Date().toISOString().split('T')[0];
         
-        await Appointment.create({
-            doctorId: doctor.id,
-            patientId: createdPatients[0].id,
-            patientName: createdPatients[0].fullName,
-            time: '09:00 AM',
-            date: today,
-            type: 'Follow-up',
-            status: 'In Progress'
-        });
+        const times = ['09:00 AM', '10:30 AM', '11:15 AM', '01:30 PM', '02:45 PM', '04:00 PM'];
+        const types = ['Follow-up', 'Annual Physical', 'Consultation', 'Lab Review', 'Urgent Care', 'Medication Refill'];
         
-        await Appointment.create({
-            doctorId: doctor.id,
-            patientId: createdPatients[2].id,
-            patientName: createdPatients[2].fullName,
-            time: '10:30 AM',
-            date: today,
-            type: 'Annual Physical',
-            status: 'Confirmed'
-        });
+        for (let i = 0; i < 6; i++) {
+            await Appointment.create({
+                doctorId: doctor.id,
+                patientId: createdPatients[i].id,
+                patientName: createdPatients[i].fullName,
+                time: times[i],
+                date: today,
+                type: types[i],
+                status: i === 0 ? 'In Progress' : i < 3 ? 'Confirmed' : 'Pending'
+            });
+        }
 
         console.log('\n✅ Enhanced data seeding completed successfully!\n');
         process.exit(0);
