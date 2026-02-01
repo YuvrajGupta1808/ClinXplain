@@ -31,7 +31,7 @@ class MedicalScribeAgent:
         
         # Create generative model
         self.model = genai.GenerativeModel(
-            'gemini-2.5-flash-lite',
+            'gemini-2.0-flash',
             generation_config={
                 "temperature": 0.1,
                 "top_p": 0.95,
