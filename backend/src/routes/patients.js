@@ -2,6 +2,7 @@ import express from 'express';
 import { authenticateToken } from '../middleware/auth.js';
 import { Doctor } from '../models/Doctor.js';
 import { Patient } from '../models/Patient.js';
+import { Visit } from '../models/Visit.js';
 
 const router = express.Router();
 
@@ -75,6 +76,49 @@ router.get('/:id', authenticateToken, async (req, res) => {
         res.status(500).json({
             success: false,
             error: 'Failed to get patient'
+        });
+    }
+});
+
+// Get patient visits
+router.get('/:id/visits', authenticateToken, async (req, res) => {
+    try {
+        const visits = await Visit.getByPatient(req.params.id);
+        res.json({
+            success: true,
+            data: visits
+        });
+    } catch (error) {
+        console.error('Get patient visits error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to get patient visits'
+        });
+    }
+});
+
+// Chat with AI
+router.post('/chat', authenticateToken, async (req, res) => {
+    try {
+        const response = await fetch('https://easily-pulse-pam-bracket.trycloudflare.com/chat', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(req.body)
+        });
+
+        if (!response.ok) {
+            throw new Error(`External API error: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        res.json(data);
+    } catch (error) {
+        console.error('Chat API error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to communicate with AI service'
         });
     }
 });

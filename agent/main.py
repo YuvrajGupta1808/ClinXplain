@@ -332,6 +332,23 @@ Rules:
             logger.error(f"❌ Error sending transcript: {e}")
 
     @weave.op()
+    async def _call_model(self, system_instruction: str, user_prompt: str) -> str:
+        """Isolated LLM call to ensure system prompt is traced."""
+        # Create a fresh model instance to use the specific system instruction for this call
+        # This ensures our trace reflects exactly what was used.
+        model = genai.GenerativeModel(
+            'gemini-2.5-flash-lite',
+            generation_config={
+                "temperature": 0.1,
+                "top_p": 0.95,
+                "top_k": 40,
+                "max_output_tokens": 2048,
+            },
+            system_instruction=system_instruction
+        )
+        response = await asyncio.to_thread(model.generate_content, user_prompt)
+        return response.text
+
     async def _extract_and_send(self, force=False):
         """Extract clinical data with W&B Weave tracing."""
         if not self.conversation_buffer:
@@ -340,16 +357,20 @@ Rules:
         try:
             conversation = "\n".join(self.conversation_buffer)
             
-            prompt = f"""Extract clinical data from this conversation:
+            user_prompt = f"""Extract clinical data from this conversation:
 
 {conversation}
 
 Generate comprehensive JSON with all clinical fields including insights."""
             
-            logger.info(f"🤖 Extracting clinical data (prompt v{self.evolution.prompt_version})...")
-            response = await asyncio.to_thread(self.chat.send_message, prompt)
+            # Get current system instruction with latest evolution state
+            system_instruction = self._get_system_instruction()
             
-            response_text = response.text.strip()
+            logger.info(f"🤖 Extracting clinical data (prompt v{self.evolution.prompt_version})...")
+            
+            # Call the traced method
+            response_text = await self._call_model(system_instruction, user_prompt)
+            response_text = response_text.strip()
             
             if '{' in response_text and '}' in response_text:
                 start = response_text.find('{')

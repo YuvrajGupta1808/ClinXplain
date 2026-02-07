@@ -195,7 +195,7 @@ const AgentFeedbackPanel: React.FC<AgentFeedbackPanelProps> = ({
 
             {/* Expanded Content */}
             {isExpanded && (
-                <div className="p-4 border-t border-purple-200 space-y-4">
+                <div className="p-4 border-t border-purple-200 space-y-4 max-h-[50vh] overflow-y-auto">
                     {/* Quick Rating Buttons */}
                     <div>
                         <h4 className="text-xs font-bold text-slate-500 uppercase mb-2">Quick Rate Output</h4>

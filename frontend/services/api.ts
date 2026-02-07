@@ -99,6 +99,15 @@ export const patientsAPI = {
     delete: async (id: string) => {
         const response = await api.delete(`/patients/${id}`);
         return response.data;
+    },
+
+    chat: async (data: {
+        message: string;
+        patient_id?: string;
+        conversation_history?: Array<{ query: string; response: string }>;
+    }) => {
+        const response = await api.post('/patients/chat', data);
+        return response.data;
     }
 };
 

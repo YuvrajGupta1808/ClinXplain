@@ -1,15 +1,8 @@
 import {
-    Activity,
     Bell,
-    Calendar,
-    FileText,
     HelpCircle,
-    LayoutDashboard,
     LogOut,
-    Phone,
-    Search,
     Settings,
-    Sparkles,
     Stethoscope,
     Users
 } from 'lucide-react';
@@ -130,39 +123,12 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
           Main Menu
         </div>
         
-        {[
-          { id: 'Assistant', icon: <Sparkles size={20} strokeWidth={2} />, label: 'AI Assistant' },
-          { id: 'Visits', icon: <LayoutDashboard size={20} strokeWidth={2} />, label: 'Dashboard' },
-          { id: 'Patients', icon: <Users size={20} strokeWidth={2} />, label: 'Patients' },
-          { id: 'Scribe', icon: <FileText size={20} strokeWidth={2} />, label: 'AI Scribe' },
-          { id: 'Calendar', icon: <Calendar size={20} strokeWidth={2} />, label: 'Appointments' },
-          { id: 'Nurse', icon: <Activity size={20} strokeWidth={2} />, label: 'Clinical Notes' },
-        ].map((item) => (
-          <MenuItem 
-            key={item.id}
-            icon={item.icon} 
-            label={item.label}
-            active={activeTab === item.id}
-            onClick={() => onTabChange(item.id)}
-          />
-        ))}
-
-        <div className="text-[10px] uppercase font-bold text-slate-400 tracking-wider mt-6 mb-3 px-2">
-          AI Tools
-        </div>
-        
-        {[
-          { id: 'Researcher', icon: <Search size={20} strokeWidth={2} />, label: 'Research' },
-          { id: 'Interpreter', icon: <Phone size={20} strokeWidth={2} />, label: 'Interpreter' },
-        ].map((item) => (
-          <MenuItem 
-            key={item.id}
-            icon={item.icon} 
-            label={item.label}
-            active={activeTab === item.id}
-            onClick={() => onTabChange(item.id)}
-          />
-        ))}
+        <MenuItem 
+          icon={<Users size={20} strokeWidth={2} />} 
+          label="Patients"
+          active={activeTab === 'Patients'}
+          onClick={() => onTabChange('Patients')}
+        />
       </div>
 
 

@@ -29,20 +29,11 @@ const CoverPage: React.FC<CoverPageProps> = ({ onGetStarted, onSignIn }) => {
             <span className="text-xl font-bold text-slate-800">ClinXplain</span>
           </div>
           <div className="flex items-center gap-4">
-            <button className="text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">
-              Features
-            </button>
-            <button className="text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">
-              Pricing
-            </button>
-            <button className="text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">
-              Contact
-            </button>
             <button 
-              onClick={onSignIn}
-              className="px-4 py-2 text-sm font-semibold text-blue-600 hover:text-blue-700 transition-colors"
+              onClick={onGetStarted}
+              className="px-6 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
             >
-              Sign In
+              Enter Dashboard
             </button>
           </div>
         </header>
@@ -75,11 +66,8 @@ const CoverPage: React.FC<CoverPageProps> = ({ onGetStarted, onSignIn }) => {
                 onClick={onGetStarted}
                 className="group inline-flex items-center gap-2 px-8 py-4 bg-blue-600 text-white rounded-xl font-semibold text-base shadow-lg shadow-blue-600/20 hover:bg-blue-700 hover:shadow-xl hover:shadow-blue-600/30 transition-all"
               >
-                Get Started Free
+                Enter Dashboard
                 <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" strokeWidth={2.5} />
-              </button>
-              <button className="inline-flex items-center gap-2 px-8 py-4 bg-white text-slate-700 rounded-xl font-semibold text-base border-2 border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition-all">
-                Watch Demo
               </button>
             </div>
 

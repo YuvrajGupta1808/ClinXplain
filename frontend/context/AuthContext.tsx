@@ -21,19 +21,18 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const [user, setUser] = useState<User | null>(null);
-    const [token, setToken] = useState<string | null>(null);
-    const [loading, setLoading] = useState(true);
+    const [user, setUser] = useState<User | null>({
+        id: 'demo-doctor',
+        email: 'doctor@clinxplain.com',
+        name: 'Dr. Marcus Thorne',
+        specialty: 'Internal Medicine'
+    });
+    const [token, setToken] = useState<string | null>('demo-token');
+    const [loading, setLoading] = useState(false);
 
-    // Load user from localStorage on mount
+    // Auto-authenticate with demo user (no localStorage needed)
     useEffect(() => {
-        const storedToken = localStorage.getItem('token');
-        const storedUser = localStorage.getItem('user');
-        
-        if (storedToken && storedUser) {
-            setToken(storedToken);
-            setUser(JSON.parse(storedUser));
-        }
+        // Already authenticated by default
         setLoading(false);
     }, []);
 

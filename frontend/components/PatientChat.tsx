@@ -1,5 +1,6 @@
 import { ArrowLeft, ArrowRight, Bot, Mic, Sparkles, User } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
+import { patientsAPI } from '../services/api';
 import { Patient } from '../types';
 
 interface Message {
@@ -52,17 +53,46 @@ const PatientChat: React.FC<PatientChatProps> = ({ patient, onBack }) => {
     setInput('');
     setIsTyping(true);
 
-    // Simulated AI Response
-    setTimeout(() => {
+    try {
+      // Build conversation history
+      const history: { query: string; response: string }[] = [];
+      let lastUserContent: string | null = null;
+      
+      messages.forEach(msg => {
+        if (msg.role === 'user') {
+          lastUserContent = msg.content;
+        } else if (msg.role === 'assistant' && lastUserContent) {
+          history.push({ query: lastUserContent, response: msg.content });
+          lastUserContent = null;
+        }
+      });
+
+      const response = await patientsAPI.chat({
+        message: userMsg.content,
+        patient_id: patient.id,
+        conversation_history: history
+      });
+
       const assistantMsg: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: `I've analyzed ${patient.name}'s records. Based on their last visit on ${patient.lastVisit || 'file'}, my recommendation is to monitor their cardiovascular response to the current regimen. Would you like me to pull up their recent lab results?`,
+        content: response.response, // API returns { response: "string", ... }
         timestamp: new Date()
       };
       setMessages(prev => [...prev, assistantMsg]);
+    } catch (error) {
+      console.error('Chat error:', error);
+      // Optional: Add error message to chat
+      const errorMsg: Message = {
+         id: (Date.now() + 1).toString(),
+         role: 'assistant',
+         content: 'Sorry, I encountered an error connecting to the AI service. Please try again.',
+         timestamp: new Date()
+      };
+      setMessages(prev => [...prev, errorMsg]);
+    } finally {
       setIsTyping(false);
-    }, 1500);
+    }
   };
 
   return (
@@ -119,7 +149,32 @@ const PatientChat: React.FC<PatientChatProps> = ({ patient, onBack }) => {
                   ? 'bg-white border border-slate-100 text-slate-800 rounded-tl-none' 
                   : 'bg-blue-600 text-white rounded-tr-none font-medium'
               }`}>
-                {msg.content.split('**').map((part, i) => i % 2 === 1 ? <b key={i}>{part}</b> : part)}
+                {msg.role === 'assistant' ? (
+                  msg.content.includes('**Response:**') ? (
+                    // Parse the structured AI response
+                    <div>
+                      {/* Main Response */}
+                      <p className="mb-4 text-base">
+                        {msg.content.split('**Response:**')[1]?.split('---')[0]?.trim().split('**').map((part, i) => i % 2 === 1 ? <b key={i}>{part}</b> : part)}
+                      </p>
+                      
+                      {/* Metadata / Stats (Collapsible or Small) */}
+                      {msg.content.includes('Evolution Statistics:') && (
+                         <div className="pt-3 border-t border-slate-100 text-xs text-slate-400">
+                           <p className="font-bold mb-1 uppercase tracking-wider">Evolution Stats</p>
+                           {msg.content.split('**Evolution Statistics:**')[1]?.trim().split('\n').map((line, i) => (
+                             <div key={i}>{line.replace(/- /g, '').trim()}</div>
+                           ))}
+                         </div>
+                      )}
+                    </div>
+                  ) : (
+                    // Fallback for simple markdown
+                    msg.content.split('**').map((part, i) => i % 2 === 1 ? <b key={i}>{part}</b> : part)
+                  )
+                ) : (
+                  msg.content
+                )}
               </div>
               <p className={`text-[10px] font-bold text-slate-400 uppercase tracking-widest ${msg.role === 'user' ? 'text-right' : ''}`}>
                 {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
